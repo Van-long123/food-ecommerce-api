@@ -16,7 +16,7 @@ export const corsOptions = {
     }
 
     // Cuối cùng nếu origin không được chấp nhận thì trả về lỗi
-    return callback(new ApiError(StatusCodes.FORBIDDEN, `${origin} not allowed by our CORS Policy.`))
+    return callback(new ApiError(StatusCodes.FORBIDDEN, `${origin} không được phép truy cập theo chính sách CORS.`))
   },
 
   optionsSuccessStatus: 200,
