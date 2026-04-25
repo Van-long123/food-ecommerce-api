@@ -1,0 +1,17 @@
+import express from 'express'
+import { clientCategoryRoute } from './categoryRoute'
+import { clientProductRoute } from './productRoute'
+import { clientArticleRoute } from './articleRoute'
+import { homeRoute } from './homeRoute'
+import { userRoute } from './userRoute'
+
+const router = express.Router()
+
+router.use('/users', userRoute)
+
+router.use('/categories', clientCategoryRoute)
+router.use('/products', clientProductRoute)
+router.use('/articles', clientArticleRoute)
+router.use('/home', homeRoute)
+
+export const clientRouter = router

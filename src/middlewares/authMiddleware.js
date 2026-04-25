@@ -2,6 +2,7 @@ import { StatusCodes } from 'http-status-codes'
 import { env } from '~/config/environment'
 import { jwtProvider } from '~/providers/jwtProvider'
 import ApiError from '~/utils/ApiError'
+import { userModel } from '~/models/userModel'
 
 const isAuthorized = async (req, res, next) => {
   const clientAccessToken = req.cookies?.accessToken
@@ -25,4 +26,30 @@ const isAuthorized = async (req, res, next) => {
   }
 }
 
-export const authMiddleware = { isAuthorized }
+/**
+ * Kiểm tra quyền Admin — phải dùng sau isAuthorized
+ * Lấy role từ DB để tránh role bị giả mạo trong token.
+ */
+const isAdmin = async (req, res, next) => {
+  try {
+    const userId = req.jwtDecoded?._id
+    if (!userId) {
+      return next(new ApiError(StatusCodes.UNAUTHORIZED, 'Không tìm thấy thông tin xác thực!'))
+    }
+
+    const user = await userModel.findOneById(userId)
+    if (!user) {
+      return next(new ApiError(StatusCodes.UNAUTHORIZED, 'Tài khoản không tồn tại!'))
+    }
+
+    if (user.role !== userModel.USER_ROLES.ADMIN) {
+      return next(new ApiError(StatusCodes.FORBIDDEN, 'Bạn không có quyền thực hiện thao tác này!'))
+    }
+
+    next()
+  } catch (error) {
+    next(new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, 'Lỗi xác thực quyền truy cập!'))
+  }
+}
+
+export const authMiddleware = { isAuthorized, isAdmin }
