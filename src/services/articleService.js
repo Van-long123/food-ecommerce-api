@@ -101,10 +101,11 @@ const getListAdmin = async (query) => {
       })
     }
 
-    const { data, total } = await articleModel.getList({ queryConditions, page, limit, sort: { [sortField]: sortOrder } })
+    const { data, total, stats } = await articleModel.getList({ queryConditions, page, limit, sort: { [sortField]: sortOrder } })
     return {
       data,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      stats
     }
   } catch (error) {
     throw error
@@ -242,10 +243,11 @@ const getListClient = async (query) => {
       })
     }
 
-    const { data, total } = await articleModel.getList({ queryConditions, page, limit, sort: { [sortField]: sortOrder } })
+    const { data, total, stats } = await articleModel.getList({ queryConditions, page, limit, sort: { [sortField]: sortOrder } })
     return {
       data,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      stats
     }
   } catch (error) {
     throw error

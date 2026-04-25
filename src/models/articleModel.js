@@ -123,15 +123,29 @@ const getList = async ({ queryConditions = [], page = 1, limit = 10, sort = { pu
             { $skip: (page - 1) * limit },
             { $limit: limit }
           ],
-          queryTotal: [{ $count: 'count' }]
+          queryTotal: [{ $count: 'count' }],
+          stats: [
+            {
+              $group: {
+                _id: null,
+                totalViews: { $sum: '$views' },
+                authors: { $addToSet: '$authorName' }
+              }
+            }
+          ]
         }
       }
     ]).toArray()
 
     const res = query[0]
+    const stats = res.stats[0] || { totalViews: 0, authors: [] }
     return {
       data: res.queryData || [],
-      total: res.queryTotal[0]?.count || 0
+      total: res.queryTotal[0]?.count || 0,
+      stats: {
+        totalViews: stats.totalViews,
+        totalAuthors: stats.authors.length
+      }
     }
   } catch (error) {
     throw new Error(error)
