@@ -2,6 +2,7 @@ import { StatusCodes } from 'http-status-codes'
 import { productModel } from '~/models/productModel'
 import { categoryProductModel } from '~/models/categoryProductModel'
 import { categoryModel } from '~/models/categoryModel'
+import { reviewModel } from '~/models/reviewModel'
 import ApiError from '~/utils/ApiError'
 import { slugify } from '~/utils/formatters'
 
@@ -286,9 +287,36 @@ const getListClient = async (query) => {
 // ─── CLIENT: Get detail by slug ───────────────────────────────────────────────
 const getDetailClient = async (slug) => {
   try {
-    const product = await productModel.getDetails(slug, true)
+    const product = await productModel.getDetails(slug)
     if (!product) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy sản phẩm!')
     return product
+  } catch (error) {
+    throw error
+  }
+}
+
+const createReviewClient = async (slug, reqBody, userId) => {
+  try {
+    const product = await productModel.findOneBySlug(slug)
+    if (!product) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy sản phẩm!')
+
+    const newReview = {
+      productId: product._id.toString(),
+      userId,
+      rating: reqBody.rating,
+      comment: reqBody.comment || '',
+      images: Array.isArray(reqBody.images) ? reqBody.images : [],
+      status: reviewModel.REVIEW_STATUSES.APPROVED,
+      createdAt: new Date()
+    }
+
+    await reviewModel.createNew(newReview)
+    const ratings = await productModel.syncRatingsFromReviews(newReview.productId)
+
+    return {
+      message: 'Đánh giá sản phẩm thành công!',
+      ratings
+    }
   } catch (error) {
     throw error
   }
@@ -303,5 +331,6 @@ export const productService = {
   removeCategory,
   softDelete,
   getListClient,
-  getDetailClient
+  getDetailClient,
+  createReviewClient
 }
