@@ -70,6 +70,13 @@ const getDetailClient = async (req, res, next) => {
   } catch (error) { next(error) }
 }
 
+const createCommentClient = async (req, res, next) => {
+  try {
+    const result = await articleService.createCommentClient(req.params.slug, req.body, req.jwtDecoded._id)
+    res.status(StatusCodes.CREATED).json(result)
+  } catch (error) { next(error) }
+}
+
 export const articleController = {
   createNew,
   getListAdmin,
@@ -79,5 +86,6 @@ export const articleController = {
   addCategory,
   removeCategory,
   getListClient,
-  getDetailClient
+  getDetailClient,
+  createCommentClient
 }

@@ -2,6 +2,7 @@ import { StatusCodes } from 'http-status-codes'
 import { articleModel } from '~/models/articleModel'
 import { categoryArticleModel } from '~/models/categoryArticleModel'
 import { categoryModel } from '~/models/categoryModel'
+import { userModel } from '~/models/userModel'
 import ApiError from '~/utils/ApiError'
 import { slugify } from '~/utils/formatters'
 
@@ -61,6 +62,7 @@ const createNew = async (reqBody, actorId) => {
       position: reqBody.position ?? 0,
       primary_category_id: reqBody.primary_category_id || null,
       tags: reqBody.tags || [],
+      comments: Array.isArray(reqBody.comments) ? reqBody.comments : [],
       createdBy: { account_id: actorId, createdAt: new Date() }
     }
 
@@ -266,6 +268,40 @@ const getDetailClient = async (slug) => {
   }
 }
 
+const createCommentClient = async (slug, reqBody, userId) => {
+  try {
+    const user = await userModel.findOneById(userId)
+    if (!user) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy người dùng!')
+
+    const content = String(reqBody.content || '').trim()
+    if (!content) {
+      throw new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, 'Nội dung bình luận không được để trống!')
+    }
+
+    const { article, comment } = await articleModel.addCommentBySlug(slug, {
+      name: user.displayName || user.username || 'Khách hàng',
+      avatar: user.avatar || '',
+      content,
+      createdAt: new Date()
+    })
+
+    if (!article) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy bài viết!')
+
+    return {
+      message: 'Gửi bình luận thành công!',
+      comment: {
+        _id: comment._id,
+        name: comment.name,
+        avatar: comment.avatar,
+        content: comment.content,
+        createdAt: comment.createdAt
+      }
+    }
+  } catch (error) {
+    throw error
+  }
+}
+
 export const articleService = {
   createNew,
   getListAdmin,
@@ -275,5 +311,6 @@ export const articleService = {
   removeCategory,
   softDelete,
   getListClient,
-  getDetailClient
+  getDetailClient,
+  createCommentClient
 }

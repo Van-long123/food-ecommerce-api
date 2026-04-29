@@ -629,7 +629,7 @@ const forgotPassword = async (reqBody) => {
               </p>
               <p style="margin:0 0 16px;color:#9CA3AF;font-size:13px;line-height:1.6;">
                 Thực phẩm sạch — Sống khỏe mỗi ngày<br/>
-                📍 123 Nguyễn Văn Linh, Quận Hải Châu, Đà Nẵng
+                📍 129 Cửa Đại, Hội An, Quảng Nam
               </p>
               <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr><td style="border-top:1px solid #374151;padding:16px 0 0;"></td></tr>

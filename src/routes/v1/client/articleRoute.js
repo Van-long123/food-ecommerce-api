@@ -1,5 +1,7 @@
 import express from 'express'
 import { articleController } from '~/controllers/articleController'
+import { authMiddleware } from '~/middlewares/authMiddleware'
+import { articleValidation } from '~/validations/articleValidation'
 
 const Router = express.Router()
 
@@ -10,5 +12,8 @@ Router.route('/')
 
 Router.route('/:slug')
   .get(articleController.getDetailClient)
+
+Router.route('/:slug/comments')
+  .post(authMiddleware.isAuthorized, articleValidation.createComment, articleController.createCommentClient)
 
 export const clientArticleRoute = Router

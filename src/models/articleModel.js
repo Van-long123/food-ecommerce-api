@@ -1,7 +1,6 @@
 import Joi from 'joi'
 import { ObjectId } from 'mongodb'
 import { GET_DB } from '~/config/mongodb'
-import { categoryArticleModel } from './categoryArticleModel'
 
 const ARTICLE_STATUSES = {
   ACTIVE: 'active',
@@ -27,6 +26,14 @@ const ARTICLE_COLLECTION_SCHEMA = Joi.object({
   // Primary category (category chính của bài viết — hiển thị breadcrumb, filter)
   primary_category_id: Joi.alternatives().try(Joi.string(), Joi.allow(null)).default(null),
   tags: Joi.array().items(Joi.string()).default([]),
+  comments: Joi.array().items(
+    Joi.object({
+      name: Joi.string().allow('').default(''),
+      avatar: Joi.string().allow('').default(''),
+      content: Joi.string().required(),
+      createdAt: Joi.date().default(Date.now)
+    })
+  ).default([]),
   deleted: Joi.boolean().default(false),
   createdBy: Joi.object({
     account_id: Joi.string().required(),
@@ -101,6 +108,114 @@ const getDetails = async (identifier, bySlug = false) => {
 
     const result = await GET_DB().collection(ARTICLE_COLLECTION_NAME).aggregate([
       { $match: matchCondition },
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'primary_category_id',
+          foreignField: '_id',
+          pipeline: [
+            { $match: { deleted: false } },
+            { $project: { _id: 1, title: 1, slug: 1, type: 1, thumbnail: 1 } }
+          ],
+          as: 'primary_category'
+        }
+      },
+      {
+        $addFields: {
+          primary_category: { $arrayElemAt: ['$primary_category', 0] }
+        }
+      },
+      {
+        $lookup: {
+          from: ARTICLE_COLLECTION_NAME,
+          localField: 'primary_category_id',
+          foreignField: 'primary_category_id',
+          pipeline: [
+            {
+              $match: {
+                deleted: false,
+                status: ARTICLE_STATUSES.ACTIVE
+              }
+            },
+            { $sort: { featured: -1, publishedAt: -1, createdAt: -1 } },
+            {
+              $project: {
+                _id: 1,
+                title: 1,
+                slug: 1,
+                shortDescription: 1,
+                thumbnail: 1,
+                publishedAt: 1,
+                readTime: 1,
+                views: 1
+              }
+            }
+          ],
+          as: 'relatedArticles'
+        }
+      },
+      {
+        $addFields: {
+          relatedArticles: {
+            $slice: [
+              {
+                $filter: {
+                  input: '$relatedArticles',
+                  as: 'relatedArticle',
+                  cond: { $ne: ['$$relatedArticle._id', '$_id'] }
+                }
+              },
+              3
+            ]
+          }
+        }
+      },
+      {
+        $lookup: {
+          from: ARTICLE_COLLECTION_NAME,
+          localField: 'deleted',
+          foreignField: 'deleted',
+          pipeline: [
+            {
+              $match: {
+                deleted: false,
+                status: ARTICLE_STATUSES.ACTIVE
+              }
+            },
+            { $sort: { views: -1, publishedAt: -1, createdAt: -1 } },
+            {
+              $project: {
+                _id: 1,
+                title: 1,
+                slug: 1,
+                views: 1
+              }
+            }
+          ],
+          as: 'popularArticles'
+        }
+      },
+      {
+        $addFields: {
+          popularArticles: {
+            $slice: [
+              {
+                $filter: {
+                  input: '$popularArticles',
+                  as: 'popularArticle',
+                  cond: { $ne: ['$$popularArticle._id', '$_id'] }
+                }
+              },
+              4
+            ]
+          }
+        }
+      },
+      {
+        $addFields: {
+          comments: { $ifNull: ['$comments', []] }
+        }
+      }
     ]).toArray();
 
     return result[0] || null;
@@ -163,6 +278,43 @@ const update = async (id, updateData) => {
       { returnDocument: 'after' }
     )
     return result
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const addCommentBySlug = async (slug, commentData) => {
+  try {
+    const comment = {
+      _id: new ObjectId(),
+      name: commentData.name || '',
+      avatar: commentData.avatar || '',
+      content: commentData.content,
+      createdAt: commentData.createdAt || new Date()
+    }
+
+    const result = await GET_DB().collection(ARTICLE_COLLECTION_NAME).findOneAndUpdate(
+      {
+        slug,
+        deleted: false,
+        status: ARTICLE_STATUSES.ACTIVE
+      },
+      {
+        $push: {
+          comments: {
+            $each: [comment],
+            $position: 0
+          }
+        },
+        $set: { updatedAt: new Date() }
+      },
+      { returnDocument: 'after' }
+    )
+
+    return {
+      article: result,
+      comment
+    }
   } catch (error) {
     throw new Error(error)
   }
@@ -232,6 +384,7 @@ export const articleModel = {
   getDetails,
   getList,
   update,
+  addCommentBySlug,
   pushUpdatedBy,
   incrementViews,
   softDelete,
