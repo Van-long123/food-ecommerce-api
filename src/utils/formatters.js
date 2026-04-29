@@ -18,6 +18,8 @@ export const pickUser = (user) => {
     province: user.province,
     province_code: user.province_code,
     gender: user.gender,
+    birthday: user.birthday,
+    verified: user.isActive,
     isActive: user.isActive,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,

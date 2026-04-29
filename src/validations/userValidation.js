@@ -61,6 +61,7 @@ const update = async (req, res, next) => {
     province: Joi.string().optional().allow(''),
     province_code: Joi.number().optional().allow(null),
     gender: Joi.string().optional().allow(''),
+    birthday: Joi.string().optional().allow(''),
     current_password: Joi.string().optional().pattern(PASSWORD_RULE).message(PASSWORD_RULE_MESSAGE),
     new_password: Joi.string().optional().pattern(PASSWORD_RULE).message(PASSWORD_RULE_MESSAGE)
   })

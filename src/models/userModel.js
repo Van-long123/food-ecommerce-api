@@ -26,6 +26,7 @@ const USER_COLLECTION_SCHEMA = Joi.object({
   province: Joi.string().allow('').default(''),
   province_code: Joi.number().allow(null).default(null),
   gender: Joi.string().allow('').default(''),
+  birthday: Joi.string().allow('').default(''),
   isActive: Joi.boolean().default(false),
   verifyToken: Joi.string().allow(null).default(null),
   resetPasswordToken: Joi.string().allow(null).default(null),

@@ -14,4 +14,7 @@ export const env = {
   ACCESS_TOKEN_LIFE: process.env.ACCESS_TOKEN_LIFE,
   REFRESH_TOKEN_PRIVATE_KEY: process.env.REFRESH_TOKEN_PRIVATE_KEY,
   REFRESH_TOKEN_LIFE: process.env.REFRESH_TOKEN_LIFE,
+  CLOUD_NAME: process.env.CLOUD_NAME,
+  CLOUD_KEY: process.env.CLOUD_KEY,
+  CLOUD_SECRET: process.env.CLOUD_SECRET,
 }

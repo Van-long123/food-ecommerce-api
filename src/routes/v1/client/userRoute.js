@@ -2,6 +2,7 @@ import express from 'express'
 import { userValidation } from '~/validations/userValidation'
 import { userController } from '~/controllers/userController'
 import { authMiddleware } from '~/middlewares/authMiddleware'
+import { multerUploadMiddleware } from '~/middlewares/multerUploadMiddleware'
 
 const Router = express.Router()
 
@@ -26,7 +27,8 @@ Router.route('/forgot-password')
 Router.route('/reset-password')
   .put(userValidation.resetPassword, userController.resetPassword)
 
+
 Router.route('/update')
-  .put(authMiddleware.isAuthorized, userValidation.update, userController.update)
+  .put(authMiddleware.isAuthorized, multerUploadMiddleware.upload.single('avatar'), userValidation.update, userController.update)
 
 export const userRoute = Router

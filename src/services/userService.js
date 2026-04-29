@@ -8,6 +8,7 @@ import { jwtProvider } from '~/providers/jwtProvider'
 import { env } from '~/config/environment'
 import { WEBSITE_DOMAIN } from '~/utils/constants'
 import { sendMail } from '~/utils/sendMail'
+import { CloudinaryProvider } from '~/providers/CloudinaryProvider'
 
 const RESET_PASSWORD_TOKEN_LIFE = 1000 * 60 * 15
 
@@ -687,7 +688,8 @@ const resetPassword = async (reqBody) => {
   }
 }
 
-const update = async (userId, reqBody) => {
+
+const update = async (userId, reqBody, file) => {
   try {
     const existUser = await userModel.findOneById(userId)
     if (!existUser) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản!')
@@ -711,6 +713,11 @@ const update = async (userId, reqBody) => {
       }
       delete updateData.current_password
       delete updateData.new_password
+
+      if (file) {
+        const uploadResult = await CloudinaryProvider.streamUpload(file.buffer, 'smartfood-users', file.mimetype)
+        updateData.avatar = uploadResult.secure_url
+      }
 
       updatedUser = await userModel.update(existUser._id, updateData)
     }
