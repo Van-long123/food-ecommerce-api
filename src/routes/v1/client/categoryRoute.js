@@ -1,6 +1,5 @@
 import express from 'express'
 import { categoryController } from '~/controllers/categoryController'
-import { categoryValidation } from '~/validations/categoryValidation'
 
 const Router = express.Router()
 
@@ -9,6 +8,9 @@ const Router = express.Router()
 Router.route('/')
   .get(categoryController.getListClient)
 
+Router.route('/:slug/products')
+  .get(categoryController.getProductsClient)
+  
 Router.route('/:slug')
   .get(categoryController.getDetailClient)
 

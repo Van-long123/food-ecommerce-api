@@ -520,6 +520,194 @@ const getProductsByCategory = async (categoryId, limit = 20) => {
 }
 
 /**
+ * [Category Page]
+ */
+const getListByPrimaryCategory = async ({
+  categoryId,
+  page = 1,
+  limit = 10,
+  filter = 'all',
+  sortBy = 'popular',
+  minPrice = null,
+  maxPrice = null,
+  brands = [],
+  newWithinDays = 30
+} = {}) => {
+  try {
+
+    const sanitizedPage = Number.isFinite(page) && page > 0 ? page : 1
+    const sanitizedLimit = Number.isFinite(limit) && limit > 0 ? limit : 10
+
+    const priceMatch = {}
+    const minPriceNumber = typeof minPrice === 'number' && Number.isFinite(minPrice) ? minPrice : null
+    const maxPriceNumber = typeof maxPrice === 'number' && Number.isFinite(maxPrice) ? maxPrice : null
+    if (minPriceNumber !== null) priceMatch.$gte = minPriceNumber
+    if (maxPriceNumber !== null) priceMatch.$lte = maxPriceNumber
+
+    const normalizedBrands = Array.isArray(brands)
+      ? brands.map((b) => String(b || '').trim()).filter(Boolean)
+      : []
+
+    const filterStages = []
+
+    // Filter chip mapping
+    if (filter === 'best') {
+      filterStages.push({ $match: { featured: true } })
+    }
+    if (filter === 'discount') {
+      filterStages.push({ $match: { discountPercentage: { $gt: 0 } } })
+    }
+
+    if (Object.keys(priceMatch).length) {
+      filterStages.push({ $match: { price: priceMatch } })
+    }
+    if (normalizedBrands.length) {
+      filterStages.push({
+        $match: {
+          $or: [
+            { brand: { $in: normalizedBrands } },
+            { tags: { $elemMatch: { $in: normalizedBrands } } }
+          ]
+        }
+      })
+    }
+
+    const sortStage = (() => {
+      if (sortBy === 'priceAsc') return { $sort: { 'product.price': 1, 'product.createdAt': -1 } }
+      if (sortBy === 'priceDesc') return { $sort: { 'product.price': -1, 'product.createdAt': -1 } }
+      if (sortBy === 'discountDesc') return { $sort: { 'product.discountPercentage': -1, 'product.position': 1, 'product.createdAt': -1 } }
+
+      return {
+        $sort: {
+          // '_productSold': -1,
+          'product.featured': -1,
+          'product.position': 1,
+          'product.createdAt': -1
+        }
+      }
+    })()
+
+    // 1. Xác định collection cơ sở
+    const isCampaign = !categoryId || String(categoryId) === 'null'
+    const queryBase = isCampaign 
+      ? GET_DB().collection(PRODUCT_COLLECTION_NAME)
+      : GET_DB().collection(categoryProductModel.CATEGORY_PRODUCT_COLLECTION_NAME)
+
+    const initialPipeline = []
+
+    if (isCampaign) {
+      // Trường hợp Campaign: Đứng từ bảng sản phẩm
+      initialPipeline.push(
+        { $match: { deleted: false, status: PRODUCT_STATUSES.ACTIVE } },
+        { $addFields: { product: '$$ROOT' } }
+      )
+    } else {
+      initialPipeline.push(
+        { $match: { category_id: new ObjectId(categoryId) } },
+        {
+          $lookup: {
+            from: PRODUCT_COLLECTION_NAME,
+            localField: 'product_id',
+            foreignField: '_id',
+            pipeline: [
+            { $match: { deleted: false } },
+          ],
+            as: 'product'
+          }
+        },
+        // $unwind = “bóc từng phần tử trong array ra thành document riêng”
+        { $unwind: '$product' },
+        
+    
+      )
+    }
+
+    const query = await queryBase.aggregate([
+      ...initialPipeline,
+
+      {
+        $facet: {
+          priceStats: [
+            {
+              $group: {
+                _id: null,
+                minPrice: { $min: '$product.price' },
+                maxPrice: { $max: '$product.price' }
+              }
+            }
+          ],
+          queryData: [
+            ...filterStages.map(stage => {
+              if (stage.$match) {
+                const newMatch = {}
+                Object.keys(stage.$match).forEach(key => {
+                  newMatch[`product.${key}`] = stage.$match[key]
+                })
+                return { $match: newMatch }
+              }
+              return stage
+            }),
+            sortStage,
+            { $skip: (sanitizedPage - 1) * sanitizedLimit },
+            { $limit: sanitizedLimit },
+            {
+              //  ko có $project thì data sẽ là các field của category_product + product nested 
+              $project: {
+                _id: '$product._id',
+                // categoryId: '$category_id',
+                title: '$product.title',
+                slug: '$product.slug',
+                thumbnail: '$product.thumbnail',
+                price: '$product.price',
+                originalPrice: '$product.originalPrice',
+                discountPercentage: '$product.discountPercentage',
+                featured: '$product.featured',
+                isBestPrice: '$product.isBestPrice',
+                isOnlineExclusive: '$product.isOnlineExclusive',
+                tags: '$product.tags',
+                brand: '$product.brand',
+                // sold: '$_productSold',
+                // isNew: '$_productIsNew',
+                createdAt: '$product.createdAt'
+              }
+            }
+          ],
+          queryTotal: [
+            ...filterStages.map(stage => {
+              if (stage.$match) {
+                const newMatch = {}
+                Object.keys(stage.$match).forEach(key => {
+                  newMatch[`product.${key}`] = stage.$match[key]
+                })
+                return { $match: newMatch }
+              }
+              return stage
+            }),
+            { $count: 'count' }
+          ]
+        }
+      }
+    ]).toArray()
+
+    const res = query[0] || {}
+    const data = Array.isArray(res.queryData) ? res.queryData : []
+    const total = res.queryTotal?.[0]?.count || 0
+    const stats = res.priceStats?.[0] || null
+
+    return {
+      data,
+      total,
+      priceStats: {
+        minPrice: stats?.minPrice ?? 0,
+        maxPrice: stats?.maxPrice ?? 0
+      }
+    }
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+/**
  * Lấy category chi tiết kèm danh sách products của nó (qua slug)
  * Phục vụ trang danh sách sản phẩm theo category
  */
@@ -635,6 +823,7 @@ export const productModel = {
   softDelete,
   getCampaignProducts,
   getProductsByCategory,
+  getListByPrimaryCategory,
   // getByCategorySlug,
   syncRatingsFromReviews
 }

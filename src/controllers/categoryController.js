@@ -71,6 +71,15 @@ const getDetailClient = async (req, res, next) => {
   }
 }
 
+const getProductsClient = async (req, res, next) => {
+  try {
+    const result = await categoryService.getProductsClient(req.params.slug, req.query)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const categoryController = {
   createNew,
   getListAdmin,
@@ -78,5 +87,6 @@ export const categoryController = {
   update,
   softDelete,
   getListClient,
-  getDetailClient
+  getDetailClient,
+  getProductsClient
 }

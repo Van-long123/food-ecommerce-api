@@ -1,7 +1,9 @@
 import { StatusCodes } from 'http-status-codes'
 import { categoryModel } from '~/models/categoryModel'
+import { productModel } from '~/models/productModel'
 import ApiError from '~/utils/ApiError'
 import { slugify } from '~/utils/formatters'
+import { parsePositiveInt, toNumberOrNull } from '~/utils/parsers'
 
 // ─── Helper: generate unique slug ─────────────────────────────────────────────
 const generateUniqueSlug = async (title, providedSlug) => {
@@ -150,6 +152,94 @@ const getDetailClient = async (slug) => {
   }
 }
 
+// ─── CLIENT: Category Products Page ───────────────────────────────────────────
+const getProductsClient = async (slug, query = {}) => {
+  try {
+    const category = await categoryModel.findOneBySlug(slug)
+    if (!category || category.deleted) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy category!')
+    if (category.status !== categoryModel.CATEGORY_STATUSES.ACTIVE) {
+      throw new ApiError(StatusCodes.NOT_FOUND, 'Danh mục hiện không khả dụng!')
+    }
+    if (category.type !== categoryModel.CATEGORY_TYPES.PRODUCT) {
+      throw new ApiError(StatusCodes.NOT_FOUND, 'Danh mục không hợp lệ!')
+    }
+
+    const page = parsePositiveInt(query.page, 1)
+    const limit = parsePositiveInt(query.limit, 15)
+    const filter = String(query.filter || 'all')
+    const sortBy = String(query.sortBy || query.sort || 'popular')
+
+    const minPrice = toNumberOrNull(query.minPrice)
+    const maxPrice = toNumberOrNull(query.maxPrice)
+
+    const brands = (() => {
+      if (Array.isArray(query.brands)) return query.brands
+      if (typeof query.brands === 'string') return query.brands.split(',')
+      if (typeof query.brand === 'string') return query.brand.split(',')
+      return []
+    })()
+
+    const { data, total, priceStats } = await productModel.getListByPrimaryCategory({
+      categoryId: category._id,
+      page,
+      limit,
+      filter,
+      sortBy,
+      minPrice,
+      maxPrice,
+      brands
+    })
+
+    const products = data.map((item) => {
+      const price = toNumberOrNull(item.price) || 0
+      const originalPrice = toNumberOrNull(item.originalPrice)
+      const normalizedOriginal = originalPrice && originalPrice > price ? originalPrice : null
+      const discountPercent = toNumberOrNull(item.discountPercentage)
+
+      return {
+        id: item._id?.toString?.() || String(item._id || ''),
+        slug: item.slug || '',
+        name: item.title || '',
+        image: item.thumbnail || '',
+        price,
+        originalPrice: normalizedOriginal,
+        discountPercent,
+        isBestPrice: Boolean(item.isBestPrice),
+        isOnlineExclusive: Boolean(item.isOnlineExclusive),
+        buttonText: 'Mua',
+        // sold: typeof item.sold === 'number' ? item.sold : toNumberOrNull(item.sold) || 0,
+        // isNew: Boolean(item.isNew),
+        brand: item.brand || (Array.isArray(item.tags) ? item.tags[0] : null) || null
+      }
+    })
+
+
+
+    return {
+      category: {
+        id: category._id?.toString?.() || String(category._id || ''),
+        slug: category.slug,
+        title: category.title,
+        thumbnail: category.thumbnail || '',
+        parent_id: category.parent_id || null
+      },
+      products,
+      priceStats: {
+        minPrice: priceStats?.minPrice ?? 0,
+        maxPrice: priceStats?.maxPrice ?? 0
+      },
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    }
+  } catch (error) {
+    throw error
+  }
+}
+
 export const categoryService = {
   createNew,
   getListAdmin,
@@ -157,5 +247,6 @@ export const categoryService = {
   update,
   softDelete,
   getListClient,
-  getDetailClient
+  getDetailClient,
+  getProductsClient
 }
