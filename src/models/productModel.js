@@ -491,6 +491,27 @@ const getCampaignProducts = async ({ match = {}, sort = { createdAt: -1 }, limit
   }
 }
 
+const getPaginatedCampaignProducts = async ({ match = {}, sort = { createdAt: -1 }, limit = 20, page = 1 }) => {
+  try {
+    const queryConditions = [
+      { deleted: false },
+      { status: PRODUCT_STATUSES.ACTIVE },
+      ...Object.keys(match).map(key => ({ [key]: match[key] }))
+    ]
+
+    const result = await getList({
+      queryConditions,
+      page,
+      limit,
+      sort
+    })
+
+    return result
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 /**
  * Lấy products của một category — dùng trong homeService (aggregate pipeline)
  */
@@ -587,23 +608,8 @@ const getListByPrimaryCategory = async ({
       }
     })()
 
-    // 1. Xác định collection cơ sở
-    const isCampaign = !categoryId || String(categoryId) === 'null'
-    const queryBase = isCampaign 
-      ? GET_DB().collection(PRODUCT_COLLECTION_NAME)
-      : GET_DB().collection(categoryProductModel.CATEGORY_PRODUCT_COLLECTION_NAME)
-
-    const initialPipeline = []
-
-    if (isCampaign) {
-      // Trường hợp Campaign: Đứng từ bảng sản phẩm
-      initialPipeline.push(
-        { $match: { deleted: false, status: PRODUCT_STATUSES.ACTIVE } },
-        { $addFields: { product: '$$ROOT' } }
-      )
-    } else {
-      initialPipeline.push(
-        { $match: { category_id: new ObjectId(categoryId) } },
+    const query = await GET_DB().collection(categoryProductModel.CATEGORY_PRODUCT_COLLECTION_NAME).aggregate([
+      { $match: { category_id: new ObjectId(categoryId) } },
         {
           $lookup: {
             from: PRODUCT_COLLECTION_NAME,
@@ -617,13 +623,6 @@ const getListByPrimaryCategory = async ({
         },
         // $unwind = “bóc từng phần tử trong array ra thành document riêng”
         { $unwind: '$product' },
-        
-    
-      )
-    }
-
-    const query = await queryBase.aggregate([
-      ...initialPipeline,
 
       {
         $facet: {
@@ -822,6 +821,7 @@ export const productModel = {
   pushUpdatedBy,
   softDelete,
   getCampaignProducts,
+  getPaginatedCampaignProducts,
   getProductsByCategory,
   getListByPrimaryCategory,
   // getByCategorySlug,

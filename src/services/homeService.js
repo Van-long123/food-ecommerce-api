@@ -185,9 +185,34 @@ const getHomeAggregate = async (queryParams = {}) => {
 //   })
 // }
 
+const getCampaignProductsBySlug = async (slug, { page = 1, limit = 20 }) => {
+  const campaign = CAMPAIGNS.find(c => c.slug === slug)
+  if (!campaign) {
+    throw new Error('Campaign not found')
+  }
+
+  const result = await productModel.getPaginatedCampaignProducts({
+    match: campaign.match,
+    sort: campaign.sort,
+    limit: parsePositiveInt(limit, 20),
+    page: parsePositiveInt(page, 1)
+  })
+
+  return {
+    campaign: {
+      id: campaign.id,
+      slug: campaign.slug,
+      name: campaign.name
+    },
+    data: result.data.map(mapProductForHome),
+    total: result.total
+  }
+}
+
 export const homeService = {
   // getLandingPageData,
   getHomeAggregate,
+  getCampaignProductsBySlug
   // getHomeCategoryProducts,
   // getHomeBlogs
 }

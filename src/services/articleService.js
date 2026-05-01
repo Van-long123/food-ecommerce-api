@@ -234,7 +234,9 @@ const getListClient = async (query) => {
 
     const queryConditions = [{ deleted: false }, { status: 'active' }]
     if (query.featured !== undefined) queryConditions.push({ featured: query.featured === 'true' })
-    if (query.primary_category_id) queryConditions.push({ primary_category_id: query.primary_category_id })
+    
+    const categoryId = query.category_id || query.primary_category_id || null
+
     if (query.keyword) {
       queryConditions.push({
         $or: [
@@ -245,7 +247,7 @@ const getListClient = async (query) => {
       })
     }
 
-    const { data, total, stats } = await articleModel.getList({ queryConditions, page, limit, sort: { [sortField]: sortOrder } })
+    const { data, total, stats } = await articleModel.getList({ queryConditions, categoryId, page, limit, sort: { [sortField]: sortOrder } })
     return {
       data,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },

@@ -8,6 +8,7 @@ const Router = express.Router()
 
 // Production Home APIs
 Router.route('/aggregate').get(homeController.getHomeAggregate)
+Router.route('/campaigns/:slug/products').get(homeController.getCampaignProducts)
 // Router.route('/category-products').get(homeController.getHomeCategoryProducts)
 // Router.route('/blogs').get(homeController.getHomeBlogs)
 

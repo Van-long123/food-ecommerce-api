@@ -227,10 +227,39 @@ const getDetails = async (identifier, bySlug = false) => {
 /**
  * Danh sách articles với $facet — giống boardModel.getBoards().
  */
-const getList = async ({ queryConditions = [], page = 1, limit = 10, sort = { publishedAt: -1 } }) => {
+const getList = async ({ queryConditions = [], categoryId = null, page = 1, limit = 10, sort = { publishedAt: -1 } }) => {
   try {
-    const query = await GET_DB().collection(ARTICLE_COLLECTION_NAME).aggregate([
-      { $match: { $and: queryConditions } },
+    const isCategoryFilter = !!categoryId;
+    const baseCollection = isCategoryFilter
+      ? GET_DB().collection('category_articles')
+      : GET_DB().collection(ARTICLE_COLLECTION_NAME);
+
+    const initialPipeline = [];
+
+    if (isCategoryFilter) {
+      initialPipeline.push(
+        { $match: { category_id: new ObjectId(categoryId) } },
+        {
+          $lookup: {
+            from: ARTICLE_COLLECTION_NAME,
+            localField: 'article_id',
+            foreignField: '_id',
+            pipeline: [
+              { $match: { deleted: false } }
+            ],
+            as: 'article'
+          }
+        },
+        { $unwind: '$article' },
+        { $replaceRoot: { newRoot: '$article' } }
+      );
+    }
+
+    const matchStage = queryConditions.length > 0 ? { $match: { $and: queryConditions } } : { $match: {} };
+
+    const query = await baseCollection.aggregate([
+      ...initialPipeline,
+      matchStage,
       { $sort: sort },
       {
         $facet: {
