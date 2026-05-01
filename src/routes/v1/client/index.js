@@ -4,6 +4,7 @@ import { clientProductRoute } from './productRoute'
 import { clientArticleRoute } from './articleRoute'
 import { homeRoute } from './homeRoute'
 import { userRoute } from './userRoute'
+import { clientVoucherRoute } from './voucherRoute'
 
 const router = express.Router()
 
@@ -13,5 +14,6 @@ router.use('/categories', clientCategoryRoute)
 router.use('/products', clientProductRoute)
 router.use('/articles', clientArticleRoute)
 router.use('/home', homeRoute)
+router.use('/vouchers', clientVoucherRoute)
 
 export const clientRouter = router
