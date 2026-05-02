@@ -4,6 +4,7 @@ import { userController } from '~/controllers/userController'
 import { authMiddleware } from '~/middlewares/authMiddleware'
 import { multerUploadMiddleware } from '~/middlewares/multerUploadMiddleware'
 import passport from '~/config/passport'
+import { WEBSITE_DOMAIN } from '~/utils/constants'
 
 const Router = express.Router()
 
@@ -36,7 +37,7 @@ Router.get('/google', passport.authenticate('google', { scope: ['profile', 'emai
 Router.get('/google/callback', (req, res, next) => {
   passport.authenticate('google', { session: false }, (err, profile) => {
     if (err || !profile) {
-      return res.redirect(`${process.env.WEBSITE_DOMAIN_DEV || 'http://localhost:3000'}/auth/login?oauth_error=1`)
+      return res.redirect(`${WEBSITE_DOMAIN}/auth/login?oauth_error=1`)
     }
     req.user = profile
     next()
@@ -48,7 +49,7 @@ Router.get('/facebook', passport.authenticate('facebook', { scope: ['email'] }))
 Router.get('/facebook/callback', (req, res, next) => {
   passport.authenticate('facebook', { session: false }, (err, profile) => {
     if (err || !profile) {
-      return res.redirect(`${process.env.WEBSITE_DOMAIN_DEV || 'http://localhost:3000'}/auth/login?oauth_error=1`)
+      return res.redirect(`${WEBSITE_DOMAIN}/auth/login?oauth_error=1`)
     }
     req.user = profile
     next()

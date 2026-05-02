@@ -371,6 +371,15 @@ const login = async (reqBody) => {
 
     if (!existUser) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản!')
     if (!existUser.isActive) throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Tài khoản chưa được kích hoạt!')
+
+    // Kiểm tra nếu tài khoản chưa có mật khẩu (đăng ký qua Social)
+    if (!existUser.password) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        `Tài khoản đã liên kết với ${existUser.provider}. Vui lòng đăng nhập bằng ${existUser.provider} hoặc dùng “Quên mật khẩu”.`
+      )
+    }
+
     if (!bcryptjs.compareSync(reqBody.password, existUser.password)) {
       throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Email hoặc mật khẩu không đúng!')
     }
@@ -698,6 +707,11 @@ const update = async (userId, reqBody, file) => {
     let updatedUser = {}
 
     if (reqBody.current_password && reqBody.new_password) {
+      // Nếu tài khoản social chưa có mật khẩu, không thể dùng current_password để check
+      if (!existUser.password) {
+        throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Tài khoản của bạn chưa thiết lập mật khẩu. Vui lòng sử dụng chức năng "Quên mật khẩu" để tạo mật khẩu lần đầu.')
+      }
+
       if (!bcryptjs.compareSync(reqBody.current_password, existUser.password)) {
         throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Mật khẩu hiện tại không đúng!')
       }
