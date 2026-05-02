@@ -3,6 +3,7 @@ import { userValidation } from '~/validations/userValidation'
 import { userController } from '~/controllers/userController'
 import { authMiddleware } from '~/middlewares/authMiddleware'
 import { multerUploadMiddleware } from '~/middlewares/multerUploadMiddleware'
+import passport from '~/config/passport'
 
 const Router = express.Router()
 
@@ -27,8 +28,36 @@ Router.route('/forgot-password')
 Router.route('/reset-password')
   .put(userValidation.resetPassword, userController.resetPassword)
 
-
 Router.route('/update')
   .put(authMiddleware.isAuthorized, multerUploadMiddleware.upload.single('avatar'), userValidation.update, userController.update)
+
+Router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }))
+
+Router.get('/google/callback', (req, res, next) => {
+  passport.authenticate('google', { session: false }, (err, profile) => {
+    if (err || !profile) {
+      return res.redirect(`${process.env.WEBSITE_DOMAIN_DEV || 'http://localhost:3000'}/auth/login?oauth_error=1`)
+    }
+    req.user = profile
+    next()
+  })(req, res, next)
+}, userController.socialAuthCallback)
+
+Router.get('/facebook', passport.authenticate('facebook', { scope: ['email'] }))
+
+Router.get('/facebook/callback', (req, res, next) => {
+  passport.authenticate('facebook', { session: false }, (err, profile) => {
+    if (err || !profile) {
+      return res.redirect(`${process.env.WEBSITE_DOMAIN_DEV || 'http://localhost:3000'}/auth/login?oauth_error=1`)
+    }
+    req.user = profile
+    next()
+  })(req, res, next)
+}, userController.socialAuthCallback)
+
+// ── Verify OAuth ─────────────────────────────────────────────
+// FE POST { userId } để nhận thông tin user đã đăng nhập qua OAuth
+Router.route('/verify-oauth')
+  .post(userController.verifyOAuth)
 
 export const userRoute = Router

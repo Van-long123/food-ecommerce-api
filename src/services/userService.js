@@ -728,6 +728,71 @@ const update = async (userId, reqBody, file) => {
   }
 }
 
+// Social Auth — Callback sau khi OAuth provider xác thực thành công
+// socialProfile: { socialId, provider, email, displayName, avatar }
+const socialAuthCallback = async (socialProfile) => {
+  try {
+    const { socialId, provider, email, displayName, avatar } = socialProfile
+
+    if (!socialId || !provider) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'Thông tin xác thực xã hội không hợp lệ!')
+    }
+
+    // Upsert: tìm hoặc tạo mới user từ social profile
+    const user = await userModel.upsertSocialUser({ email, displayName, avatar, provider, socialId })
+
+    if (!user) {
+      throw new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, 'Không thể xử lý tài khoản xã hội!')
+    }
+
+    const userInfo = {
+      _id: user._id.toString(),
+      email: user.email
+    }
+
+    const accessToken = await jwtProvider.generateToken(
+      userInfo,
+      env.ACCESS_TOKEN_PRIVATE_KEY,
+      env.ACCESS_TOKEN_LIFE || '1d'
+    )
+
+    const refreshToken = await jwtProvider.generateToken(
+      userInfo,
+      env.REFRESH_TOKEN_PRIVATE_KEY,
+      env.REFRESH_TOKEN_LIFE || '14d'
+    )
+
+    return {
+      _id: user._id.toString(),
+      accessToken,
+      refreshToken,
+      ...pickUser(user)
+    }
+  } catch (error) {
+    throw error
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Verify OAuth — FE gọi sau khi landing trên trang login-success
+// để xác nhận user đã được tạo/đăng nhập thành công
+// ──────────────────────────────────────────────────────────────
+const verifyOAuth = async (reqBody) => {
+  try {
+    const { userId } = reqBody
+
+    if (!userId) throw new ApiError(StatusCodes.BAD_REQUEST, 'Thiếu userId!')
+
+    const user = await userModel.findOneById(userId)
+    if (!user) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản!')
+    if (user._destroy) throw new ApiError(StatusCodes.FORBIDDEN, 'Tài khoản đã bị xóa!')
+
+    return pickUser(user)
+  } catch (error) {
+    throw error
+  }
+}
+
 export const userService = {
   createNew,
   verifyAccount,
@@ -735,5 +800,7 @@ export const userService = {
   refreshToken,
   update,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  socialAuthCallback,
+  verifyOAuth
 }

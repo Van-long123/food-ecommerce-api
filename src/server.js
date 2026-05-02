@@ -7,6 +7,7 @@ import { CONNECT_DB, CLOSE_DB } from '~/config/mongodb'
 import { errorHandlingMiddleware } from './middlewares/errorHandlingMiddleware'
 import { env } from '~/config/environment'
 import { APIs_V1 } from '~/routes/v1/index'
+import passport from '~/config/passport'
 
 const START_SERVER = () => {
   const app = express()
@@ -18,6 +19,9 @@ const START_SERVER = () => {
   })
 
   app.use(cookieParser())
+
+  // Khởi tạo Passport (không dùng session vì OAuth dùng JWT/Cookie)
+  app.use(passport.initialize())
 
   //Xử lý CORS
   app.use(cors(corsOptions))

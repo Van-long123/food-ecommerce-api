@@ -8,15 +8,22 @@ const USER_ROLES = {
   ADMIN: 'admin'
 }
 
+// Các provider đăng nhập được hỗ trợ
+const AUTH_PROVIDERS = {
+  LOCAL: 'local',
+  GOOGLE: 'google',
+  FACEBOOK: 'facebook'
+}
+
 const USER_COLLECTION_NAME = 'users'
 const USER_COLLECTION_SCHEMA = Joi.object({
-  email: Joi.string().required().pattern(EMAIL_RULE).message(EMAIL_RULE_MESSAGE),
-  password: Joi.string().required(),
+  email: Joi.string().pattern(EMAIL_RULE).message(EMAIL_RULE_MESSAGE).allow(null).default(null),
+  password: Joi.string().allow(null).default(null),
   // username cắt ra từ email và ko unique
   username: Joi.string().required().trim().strict(),
   displayName: Joi.string().required().trim().strict(),
-  phone: Joi.string().required().trim().strict(),
-  avatar: Joi.string().default(null),
+  phone: Joi.string().allow('').default(''),
+  avatar: Joi.string().allow(null, '').default(null),
   role: Joi.string().valid(...Object.values(USER_ROLES)).default(USER_ROLES.CLIENT),
   address: Joi.string().allow('').default(''),
   ward: Joi.string().allow('').default(''),
@@ -31,12 +38,27 @@ const USER_COLLECTION_SCHEMA = Joi.object({
   verifyToken: Joi.string().allow(null).default(null),
   resetPasswordToken: Joi.string().allow(null).default(null),
   resetPasswordExpiresAt: Joi.date().timestamp('javascript').allow(null).default(null),
+  // ── Social Auth Fields ────────────────────────────────────────
+  // provider chính của tài khoản: 'local' | 'google' | 'facebook'
+  provider: Joi.string()
+    .valid(...Object.values(AUTH_PROVIDERS))
+    .default(AUTH_PROVIDERS.LOCAL),
+  // Lưu danh sách các social account đã liên kết (hỗ trợ multi-provider)
+  socialAccounts: Joi.array()
+    .items(
+      Joi.object({
+        provider: Joi.string().valid('google', 'facebook').required(),
+        socialId: Joi.string().required(),
+        linkedAt: Joi.date().timestamp('javascript').default(Date.now)
+      })
+    )
+    .default([]),
   createdAt: Joi.date().timestamp('javascript').default(Date.now),
   updatedAt: Joi.date().timestamp('javascript').default(null),
   _destroy: Joi.boolean().default(false)
 })
 
-const INVALID_UPDATE_FIELDS = ['_id', 'email', 'username', 'createdAt']
+const INVALID_UPDATE_FIELDS = ['_id', 'email', 'username', 'createdAt', 'provider', 'socialAccounts']
 
 const validateBeforeCreate = async (data) => {
   return USER_COLLECTION_SCHEMA.validateAsync(data, { abortEarly: false })
@@ -94,12 +116,108 @@ const update = async (userId, updateData) => {
   }
 }
 
+/**
+ * Tìm user theo socialId + provider (dùng cho OAuth callback)
+ */
+const findOneBySocialId = async (provider, socialId) => {
+  try {
+    const result = await GET_DB().collection(USER_COLLECTION_NAME).findOne({
+      socialAccounts: { $elemMatch: { provider, socialId } }
+    })
+    return result
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+/**
+ * Tạo mới user từ social profile (Google / Facebook)
+ * Nếu email đã tồn tại → liên kết social account vào user đó (link provider)
+ * Nếu chưa tồn tại → tạo user mới và đánh dấu isActive = true ngay lập tức
+ */
+const upsertSocialUser = async ({ email, displayName, avatar, provider, socialId }) => {
+  try {
+    const db = GET_DB().collection(USER_COLLECTION_NAME)
+    const now = Date.now()
+
+    // Kiểm tra đã tồn tại social account này chưa
+    const existBySocialId = await findOneBySocialId(provider, socialId)
+    if (existBySocialId) {
+      // Cập nhật thông tin mới nhất từ provider (avatar, displayName)
+      await db.findOneAndUpdate(
+        { _id: existBySocialId._id },
+        {
+          $set: {
+            ...(avatar && { avatar }),
+            ...(displayName && { displayName }),
+            updatedAt: now
+          }
+        },
+        { returnDocument: 'after' }
+      )
+      return existBySocialId
+    }
+
+    // Kiểm tra email đã tồn tại (tài khoản local) để liên kết provider
+    if (email) {
+      const existByEmail = await findOneByEmail(email)
+      if (existByEmail) {
+        const updated = await db.findOneAndUpdate(
+          { _id: existByEmail._id },
+          {
+            $addToSet: { socialAccounts: { provider, socialId, linkedAt: now } },
+            $set: {
+              ...(avatar && !existByEmail.avatar && { avatar }),
+              isActive: true,
+              updatedAt: now
+            }
+          },
+          { returnDocument: 'after' }
+        )
+        return updated
+      }
+    }
+
+    // Tạo user mới hoàn toàn
+    const nameFromEmail = email ? email.split('@')[0] : displayName.toLowerCase().replace(/\s+/g, '_')
+    const newUser = {
+      email: email || null,
+      password: null,
+      username: nameFromEmail,
+      displayName: displayName || nameFromEmail,
+      phone: '',
+      avatar: avatar || null,
+      role: USER_ROLES.CLIENT,
+      address: '',
+      gender: '',
+      birthday: '',
+      isActive: true,          // social login không cần verify email
+      verifyToken: null,
+      resetPasswordToken: null,
+      resetPasswordExpiresAt: null,
+      provider,                // provider chính của tài khoản
+      socialAccounts: [{ provider, socialId, linkedAt: now }],
+      createdAt: now,
+      updatedAt: null,
+      _destroy: false
+    }
+
+    const created = await db.insertOne(newUser)
+    return await db.findOne({ _id: created.insertedId })
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const userModel = {
   USER_ROLES,
+  AUTH_PROVIDERS,
   USER_COLLECTION_NAME,
   USER_COLLECTION_SCHEMA,
   createNew,
   findOneById,
   findOneByEmail,
+  findOneBySocialId,
+  upsertSocialUser,
   update
 }
