@@ -262,6 +262,8 @@ const getListClient = async (query) => {
       queryConditions.push({
         $or: [
           { title: { $regex: new RegExp(query.keyword, 'i') } },
+          { slug: { $regex: new RegExp(query.keyword, 'i') } },
+          { description: { $regex: new RegExp(query.keyword, 'i') } },
           { tags: { $elemMatch: { $regex: new RegExp(query.keyword, 'i') } } }
         ]
       })
