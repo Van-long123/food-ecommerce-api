@@ -94,6 +94,20 @@ const findOneBySlugAny = async (slug) => {
   }
 }
 
+const findManyByIds = async (ids = []) => {
+  try {
+    const objectIds = ids.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id))
+    if (!objectIds.length) return []
+
+    return await GET_DB()
+      .collection(PRODUCT_COLLECTION_NAME)
+      .find({ _id: { $in: objectIds } })
+      .toArray()
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 /**
  * Chi tiết product kèm:
  *  - primary_category: thông tin category chính (lookup bằng primary_category_id)
@@ -815,6 +829,7 @@ export const productModel = {
   findOneById,
   findOneBySlug,
   findOneBySlugAny,
+  findManyByIds,
   getDetails,
   getList,
   update,

@@ -58,6 +58,7 @@ const mapProductForHome = (item) => {
     discountPercent: toNumberOrNull(item.discountPercentage),
     isBestPrice: Boolean(item.isBestPrice),
     isOnlineExclusive: Boolean(item.isOnlineExclusive),
+    stock: typeof item.stock === 'number' ? item.stock : 0,
     buttonText: 'Mua'
   }
 }
