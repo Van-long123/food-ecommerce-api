@@ -10,6 +10,14 @@ const getListClient = async (req, res, next) => {
   } catch (error) { next(error) }
 }
 
+const validateVoucher = async (req, res, next) => {
+  try {
+    const accountId = req.jwtDecoded ? req.jwtDecoded._id : null
+    const result = await voucherService.validateVoucher(req.body, accountId)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) { next(error) }
+}
+
 // ─── ADMIN ────────────────────────────────────────────────────────────────────
 
 const getListAdmin = async (req, res, next) => {
@@ -42,6 +50,7 @@ const deleteVoucher = async (req, res, next) => {
 
 export const voucherController = {
   getListClient,
+  validateVoucher,
   getListAdmin,
   createNew,
   updateVoucher,

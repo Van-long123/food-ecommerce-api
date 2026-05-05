@@ -49,7 +49,8 @@ const normalizeCartItems = async (items = []) => {
       stock,
       quantity: nextQty,
       slug: product.slug || '',
-      unit: product.unit || ''
+      unit: product.unit || '',
+      categoryId: product.primary_category_id ? String(product.primary_category_id) : ''
     })
   })
 

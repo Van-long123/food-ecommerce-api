@@ -52,6 +52,7 @@ const removeItems = async (req, res, next) => {
 
 const mergeGuestCart = async (req, res, next) => {
   try {
+    console.log("🚀 ~ mergeGuestCart ~ req.body.items:", req.body.items)
     const result = await cartService.mergeGuestCart(req.jwtDecoded._id, req.body.items)
     res.status(StatusCodes.OK).json(result)
   } catch (error) {

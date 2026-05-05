@@ -26,6 +26,21 @@ const isAuthorized = async (req, res, next) => {
   }
 }
 
+const isAuthorizedOptional = async (req, res, next) => {
+  const clientAccessToken = req.cookies?.accessToken
+  if (!clientAccessToken) {
+    return next()
+  }
+
+  try {
+    const accessTokenDecoded = await jwtProvider.verifyToken(clientAccessToken, env.ACCESS_TOKEN_PRIVATE_KEY)
+    req.jwtDecoded = accessTokenDecoded
+    next()
+  } catch (error) {
+    next() // Ignore auth error if optional
+  }
+}
+
 /**
  * Kiểm tra quyền Admin — phải dùng sau isAuthorized
  * Lấy role từ DB để tránh role bị giả mạo trong token.
@@ -52,4 +67,4 @@ const isAdmin = async (req, res, next) => {
   }
 }
 
-export const authMiddleware = { isAuthorized, isAdmin }
+export const authMiddleware = { isAuthorized, isAuthorizedOptional, isAdmin }

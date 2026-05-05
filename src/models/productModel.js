@@ -679,6 +679,7 @@ const getListByPrimaryCategory = async ({
                 isOnlineExclusive: '$product.isOnlineExclusive',
                 tags: '$product.tags',
                 brand: '$product.brand',
+                stock: '$product.stock',
                 // sold: '$_productSold',
                 // isNew: '$_productIsNew',
                 createdAt: '$product.createdAt'
