@@ -10,3 +10,10 @@ export const WEBSITE_DOMAIN = env.BUILD_MODE === 'production'
 export const API_DOMAIN = env.BUILD_MODE === 'production'
 	? env.API_DOMAIN_PROD
 	: env.API_DOMAIN_DEV
+
+export const GHN_MASTER_DATA_API = 'https://dev-online-gateway.ghn.vn/shiip/public-api/master-data'
+
+export const GHN_HEADERS = {
+  'Token': env.GHN_TOKEN,
+  'Content-Type': 'application/json'
+}

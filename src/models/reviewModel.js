@@ -17,6 +17,7 @@ const REVIEW_COLLECTION_SCHEMA = Joi.object({
   images: Joi.array().items(Joi.string()).default([]),
   status: Joi.string().valid(...Object.values(REVIEW_STATUSES)).default(REVIEW_STATUSES.APPROVED),
   createdAt: Joi.date().default(Date.now)
+  // thêm update chỉ được 1 review / product nếu đánh giá lại → update, không phải tạo mới
 })
 
 const validateBeforeCreate = async (data) => {

@@ -50,7 +50,7 @@ const ARTICLE_COLLECTION_SCHEMA = Joi.object({
     })
   ).default([]),
   createdAt: Joi.date().default(Date.now),
-  updatedAt: Joi.date().default(null)
+  updatedAt: Joi.date().default(null) //  xóa dùng updatedBy thôi
 })
 
 const INVALID_UPDATE_FIELDS = ['_id', 'createdBy', 'createdAt']
