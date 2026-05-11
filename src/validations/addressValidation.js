@@ -26,9 +26,9 @@ const createNew = async (req, res, next) => {
 
 const update = async (req, res, next) => {
   const correctCondition = Joi.object({
-    username: Joi.string().optional().trim().strict(),
-    address: Joi.string().optional().trim().strict(),
-    phone: Joi.string().optional().trim().strict(),
+    username: Joi.string().optional().trim(),
+    address: Joi.string().optional().trim(),
+    phone: Joi.string().optional().trim(),
     province: Joi.string().optional().trim(),
     district: Joi.string().optional().trim(),
     ward: Joi.string().optional().trim(),

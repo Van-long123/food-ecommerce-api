@@ -35,7 +35,7 @@ export const env = {
   GHN_API_URL: process.env.GHN_API_URL,
 
   GHN_FROM_DISTRICT_ID: process.env.GHN_FROM_DISTRICT_ID,
-  GHN_FROM_WARD_ID: process.env.GHN_FROM_WARD_ID,
+  GHN_FROM_WARD_CODE: process.env.GHN_FROM_WARD_CODE,
 
   GHN_SERVICE_ID: process.env.GHN_SERVICE_ID,
   GHN_SERVICE_TYPE_ID: process.env.GHN_SERVICE_TYPE_ID,

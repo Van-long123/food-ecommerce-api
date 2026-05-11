@@ -266,7 +266,7 @@ const createNew = async (reqBody) => {
                       line-height:1.6;
                       text-align:center;
                     ">
-                      ⏰ Link xác thực có hiệu lực trong <strong style="color:#374151;">24 giờ</strong>.<br/>
+                      // ⏰ Link xác thực có hiệu lực trong <strong style="color:#374151;">24 giờ</strong>.<br/>
                       Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.
                     </p>
 
@@ -639,7 +639,8 @@ const forgotPassword = async (reqBody) => {
               </p>
               <p style="margin:0 0 16px;color:#9CA3AF;font-size:13px;line-height:1.6;">
                 Thực phẩm sạch — Sống khỏe mỗi ngày<br/>
-                📍 129 Cửa Đại, Hội An, Quảng Nam
+                📍 123 Nguyễn Văn Linh, phường Nam Dương, Quận Hải Châu, Thành phố
+                Đà Nẵng, Việt Namm
               </p>
               <table width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr><td style="border-top:1px solid #374151;padding:16px 0 0;"></td></tr>
