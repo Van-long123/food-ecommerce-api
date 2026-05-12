@@ -215,35 +215,6 @@ const getDetails = async (identifier) => {
       },
 
 
-
-      // Lookup 3: SUGGESTIONS — Sản phẩm cùng danh mục
-      {
-        $lookup: {
-          from: PRODUCT_COLLECTION_NAME,
-          // Vẫn cần 'let' duy nhất cho trường _id để loại trừ chính nó trong match
-          let: { currentProductId: '$_id' }, 
-          localField: 'primary_category_id',
-          foreignField: 'primary_category_id',
-          pipeline: [
-            {
-              $match: {
-                deleted: false,
-                status: PRODUCT_STATUSES.ACTIVE,
-                $expr: { $ne: ['$_id', '$$currentProductId'] }
-              }
-            },
-            { $sort: { featured: -1, discountPercentage: -1, createdAt: -1 } },
-            { $limit: 8 },
-            {
-              $project: {
-                _id: 1, title: 1, slug: 1, thumbnail: 1, price: 1, originalPrice: 1,
-                discountPercentage: 1, isOnlineExclusive: 1, isBestPrice: 1
-              }
-            }
-          ],
-          as: 'suggestions'
-        }
-      }
     ]).toArray()
 // ... (matchCondition giữ nguyên)
 

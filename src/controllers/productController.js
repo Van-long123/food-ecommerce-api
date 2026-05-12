@@ -1,5 +1,6 @@
 import { StatusCodes } from 'http-status-codes'
 import { productService } from '~/services/productService'
+import { recommendationService } from '~/services/recommendationService'
 
 // ─── ADMIN ─────────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,16 @@ const createReviewClient = async (req, res, next) => {
   } catch (error) { next(error) }
 }
 
+const getRecommendations = async (req, res, next) => {
+  try {
+    const { id } = req.params
+    const limit = Math.min(parseInt(req.query.limit) || 8, 20)
+    const categoryBoost = req.query.category_boost !== 'false'
+    const result = await recommendationService.getRecommendations(id, { limit, categoryBoost })
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) { next(error) }
+}
+
 export const productController = {
   createNew,
   getListAdmin,
@@ -87,5 +98,6 @@ export const productController = {
   removeCategory,
   getListClient,
   getDetailClient,
-  createReviewClient
+  createReviewClient,
+  getRecommendations
 }

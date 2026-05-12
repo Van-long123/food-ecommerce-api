@@ -45,5 +45,8 @@ export const env = {
   GHN_DEFAULT_WIDTH: process.env.GHN_DEFAULT_WIDTH,
   GHN_DEFAULT_HEIGHT: process.env.GHN_DEFAULT_HEIGHT,
   
-  GHN_FALLBACK_FEE: process.env.GHN_FALLBACK_FEE
+  GHN_FALLBACK_FEE: process.env.GHN_FALLBACK_FEE,
+
+  // Python Recommendation Microservice
+  RECOMMENDATION_SERVICE_URL: process.env.RECOMMENDATION_SERVICE_URL
 }
