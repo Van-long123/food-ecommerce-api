@@ -1,6 +1,21 @@
 import { StatusCodes } from 'http-status-codes'
 import { orderService } from '~/services/orderService'
 
+const validateStock = async (req, res, next) => {
+  try {
+    const items = req.body.items || []
+    const result = await orderService.validateStockBeforeCheckout(items)
+    
+    res.status(StatusCodes.OK).json({
+      success: true,
+      message: 'Kiểm tra tồn kho thành công',
+      data: result
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
 const createNew = async (req, res, next) => {
   try {
     const userId = req.jwtDecoded._id
@@ -19,5 +34,6 @@ const createNew = async (req, res, next) => {
 }
 
 export const orderController = {
+  validateStock,
   createNew
 }

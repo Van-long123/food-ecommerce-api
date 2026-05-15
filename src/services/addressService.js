@@ -45,7 +45,7 @@ const createAddress = async (userId, data) => {
 const updateAddress = async (userId, addressId, data) => {
   try {
     const address = await addressModel.findOneById(addressId)
-    if (!address || address.userId.toString() !== userId.toString() || address._destroy) {
+    if (!address || address.userId.toString() !== userId.toString() || address.deleted) {
       throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy địa chỉ')
     }
 
@@ -84,7 +84,7 @@ const updateAddress = async (userId, addressId, data) => {
 const deleteAddress = async (userId, addressId) => {
   try {
     const address = await addressModel.findOneById(addressId)
-    if (!address || address.userId.toString() !== userId.toString() || address._destroy) {
+    if (!address || address.userId.toString() !== userId.toString() || address.deleted) {
       throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy địa chỉ')
     }
 

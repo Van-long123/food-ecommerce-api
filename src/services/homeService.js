@@ -5,9 +5,9 @@ import { productModel } from '~/models/productModel'
 import { parsePositiveInt, parseBoolean, toNumberOrNull } from '~/utils/parsers'
 
 const DEFAULT_LIMITS = {
-  campaign: 20,
+  campaign: 30,
   category: 100,
-  categoryProduct: 20,
+  categoryProduct: 30,
   blog: 4
 }
 
@@ -167,7 +167,7 @@ const getHomeAggregate = async (queryParams = {}) => {
       },
       sectionProductMode: 'embedded',
       lazyEndpoints: {
-        categoryProducts: '/v1/client/home/category-products?slug=<category-slug>&limit=20',
+        categoryProducts: '/v1/client/home/category-products?slug=<category-slug>&limit=30',
         blogs: '/v1/client/home/blogs?limit=4'
       }
     }
@@ -186,7 +186,7 @@ const getHomeAggregate = async (queryParams = {}) => {
 //   })
 // }
 
-const getCampaignProductsBySlug = async (slug, { page = 1, limit = 20 }) => {
+const getCampaignProductsBySlug = async (slug, { page = 1, limit = 30 }) => {
   const campaign = CAMPAIGNS.find(c => c.slug === slug)
   if (!campaign) {
     throw new Error('Campaign not found')
@@ -195,7 +195,7 @@ const getCampaignProductsBySlug = async (slug, { page = 1, limit = 20 }) => {
   const result = await productModel.getPaginatedCampaignProducts({
     match: campaign.match,
     sort: campaign.sort,
-    limit: parsePositiveInt(limit, 20),
+    limit: parsePositiveInt(limit, 30),
     page: parsePositiveInt(page, 1)
   })
 

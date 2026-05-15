@@ -14,7 +14,7 @@ const getShippingFee = async (userId, addressId, products = []) => {
   // 1. Tìm và xác minh địa chỉ
   const address = await addressModel.findOneById(addressId)
 
-  if (!address || address._destroy) {
+  if (!address || address.deleted) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy địa chỉ')
   }
 

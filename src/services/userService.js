@@ -800,7 +800,7 @@ const verifyOAuth = async (reqBody) => {
 
     const user = await userModel.findOneById(userId)
     if (!user) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản!')
-    if (user._destroy) throw new ApiError(StatusCodes.FORBIDDEN, 'Tài khoản đã bị xóa!')
+    if (user.deleted) throw new ApiError(StatusCodes.FORBIDDEN, 'Tài khoản đã bị xóa!')
 
     return pickUser(user)
   } catch (error) {

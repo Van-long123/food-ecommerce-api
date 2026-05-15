@@ -49,7 +49,17 @@ const USER_COLLECTION_SCHEMA = Joi.object({
     .default([]),
   createdAt: Joi.date().timestamp('javascript').default(Date.now),
   updatedAt: Joi.date().timestamp('javascript').default(null),
-  _destroy: Joi.boolean().default(false)
+  deleted: Joi.boolean().default(false),
+   deletedBy: Joi.object({
+      account_id: Joi.string(),
+      deletedAt: Joi.date()
+    }).allow(null).default(null),
+    updatedBy: Joi.array().items(
+      Joi.object({
+        account_id: Joi.string(),
+        updatedAt: Joi.date()
+      })
+    ).default([]),
 })
 
 const INVALID_UPDATE_FIELDS = ['_id', 'email', 'username', 'createdAt', 'provider', 'socialAccounts']
@@ -193,7 +203,7 @@ const upsertSocialUser = async ({ email, displayName, avatar, provider, socialId
       socialAccounts: [{ provider, socialId, linkedAt: now }],
       createdAt: now,
       updatedAt: null,
-      _destroy: false
+      deleted: false
     }
 
     const created = await db.insertOne(newUser)

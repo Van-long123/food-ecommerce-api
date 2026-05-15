@@ -21,7 +21,7 @@ const ADDRESS_COLLECTION_SCHEMA = Joi.object({
   
   createdAt: Joi.date().timestamp('javascript').default(Date.now),
   updatedAt: Joi.date().timestamp('javascript').default(null),
-  _destroy: Joi.boolean().default(false)
+  deleted: Joi.boolean().default(false)
 })
 
 const INVALID_UPDATE_FIELDS = ['_id', 'userId', 'createdAt']
@@ -59,7 +59,7 @@ const findByUserId = async (userId) => {
   try {
     const result = await GET_DB().collection(ADDRESS_COLLECTION_NAME).find({
       userId: new ObjectId(userId),
-      _destroy: false
+      deleted: false
     }).toArray()
     return result
   } catch (error) {
@@ -108,7 +108,7 @@ const deleteById = async (id) => {
     // Soft delete
     const result = await GET_DB().collection(ADDRESS_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(id) },
-      { $set: { _destroy: true } },
+      { $set: { deleted: true } },
       { returnDocument: 'after' }
     )
     return result
