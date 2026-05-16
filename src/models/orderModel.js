@@ -1,4 +1,5 @@
 import Joi from 'joi'
+import { ObjectId } from 'mongodb'
 import { GET_DB } from '~/config/mongodb'
 
 const ORDER_COLLECTION_NAME = 'orders'
@@ -15,12 +16,12 @@ const ORDER_COLLECTION_SCHEMA = Joi.object({
     note: Joi.string().allow('').optional()
   }).required(),
   paymentMethod: Joi.number().valid(0, 1, 2).required(), // 0: COD, 1: PayOS, 2: Momo
-  paymentStatus: Joi.string().valid('pending', 'paid', 'failed', 'refunded').default('pending'), // 0: unpaid, 1: paid
+  paymentStatus: Joi.string().valid('pending', 'completed', 'failed', 'cancelled', 'refunded').default('pending'),
   voucherCode: Joi.string().allow('', null).optional(),
   discountVoucher: Joi.number().min(0).default(0),
   shippingFee: Joi.number().min(0).default(0),
   totalPrice: Joi.number().min(0).required(),
-  status: Joi.string().valid('pending', 'confirmed', 'processing', 'shipping', 'delivered', 'cancelled').default('pending'),
+  status: Joi.string().valid('pending', 'confirmed', 'processing', 'shipping', 'delivered', 'cancelled', 'returned').default('pending'),
   createdAt: Joi.date().timestamp('javascript').default(Date.now),
   updatedAt: Joi.date().timestamp('javascript').default(null),
   updatedBy: Joi.array().items(
@@ -35,10 +36,19 @@ const validateBeforeCreate = async (data) => {
   return ORDER_COLLECTION_SCHEMA.validateAsync(data, { abortEarly: false })
 }
 
-const createNew = async (data) => {
+const createNew = async (data, options = {}) => {
   try {
     const validData = await validateBeforeCreate(data)
-    return await GET_DB().collection(ORDER_COLLECTION_NAME).insertOne(validData)
+    
+    // Convert to ObjectId before saving
+    const persistData = {
+      ...validData,
+      userId: new ObjectId(validData.userId),
+      createdAt: new Date(validData.createdAt),
+      updatedAt: validData.updatedAt ? new Date(validData.updatedAt) : null
+    }
+
+    return await GET_DB().collection(ORDER_COLLECTION_NAME).insertOne(persistData, options)
   } catch (error) {
     throw new Error(error)
   }

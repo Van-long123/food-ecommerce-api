@@ -13,4 +13,12 @@ router.post(
   checkoutController.getShippingFee
 )
 
+// POST /v1/client/checkout/cod
+router.post(
+  '/cod',
+  authMiddleware.isAuthorized,
+  checkoutValidation.createCodCheckout,
+  checkoutController.createCodCheckout
+)
+
 export const clientCheckoutRoute = router

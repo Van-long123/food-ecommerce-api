@@ -1,4 +1,5 @@
 import Joi from 'joi'
+import { ObjectId } from 'mongodb'
 import { GET_DB } from '~/config/mongodb'
 
 const CART_COLLECTION_NAME = 'carts'
@@ -23,7 +24,15 @@ const validateBeforeCreate = async (data) => {
 const createNew = async (data) => {
   try {
     const validData = await validateBeforeCreate(data)
-    return await GET_DB().collection(CART_COLLECTION_NAME).insertOne(validData)
+    const persistData = {
+      ...validData,
+      userId: new ObjectId(validData.userId),
+      items: validData.items.map(item => ({
+        ...item,
+        productId: new ObjectId(item.productId)
+      }))
+    }
+    return await GET_DB().collection(CART_COLLECTION_NAME).insertOne(persistData)
   } catch (error) {
     throw new Error(error)
   }
@@ -31,7 +40,7 @@ const createNew = async (data) => {
 
 const findByUserId = async (userId) => {
   try {
-    return await GET_DB().collection(CART_COLLECTION_NAME).findOne({ userId })
+    return await GET_DB().collection(CART_COLLECTION_NAME).findOne({ userId: new ObjectId(userId) })
   } catch (error) {
     throw new Error(error)
   }
@@ -40,11 +49,17 @@ const findByUserId = async (userId) => {
 const upsertItems = async (userId, items) => {
   try {
     const now = new Date()
+    const objectUserId = new ObjectId(userId)
+    const persistItems = items.map(item => ({
+      ...item,
+      productId: new ObjectId(item.productId)
+    }))
+
     return await GET_DB().collection(CART_COLLECTION_NAME).findOneAndUpdate(
-      { userId },
+      { userId: objectUserId },
       {
-        $set: { items, updatedAt: now },
-        $setOnInsert: { userId, createdAt: now }
+        $set: { items: persistItems, updatedAt: now },
+        $setOnInsert: { userId: objectUserId, createdAt: now }
       },
       { upsert: true, returnDocument: 'after' }
     )

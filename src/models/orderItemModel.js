@@ -19,12 +19,19 @@ const validateBeforeCreate = async (data) => {
   return ORDER_ITEM_COLLECTION_SCHEMA.validateAsync(data, { abortEarly: false })
 }
 
-const createMany = async (items) => {
+const createMany = async (items, options = {}) => {
   try {
     const validItems = await Promise.all(items.map(item => validateBeforeCreate(item)))
-    // Convert string orderId to ObjectId if necessary for queries later, 
-    // but usually keeping as string is fine if that's the project pattern.
-    return await GET_DB().collection(ORDER_ITEM_COLLECTION_NAME).insertMany(validItems)
+    
+    // Convert to ObjectId and Date before saving
+    const persistItems = validItems.map(item => ({
+      ...item,
+      orderId: new ObjectId(item.orderId),
+      productId: new ObjectId(item.productId),
+      createdAt: new Date(item.createdAt)
+    }))
+
+    return await GET_DB().collection(ORDER_ITEM_COLLECTION_NAME).insertMany(persistItems, options)
   } catch (error) {
     throw new Error(error)
   }
@@ -33,7 +40,7 @@ const createMany = async (items) => {
 const findByOrderId = async (orderId) => {
   try {
     return await GET_DB().collection(ORDER_ITEM_COLLECTION_NAME).find({
-      orderId: orderId
+      orderId: new ObjectId(orderId)
     }).toArray()
   } catch (error) {
     throw new Error(error)

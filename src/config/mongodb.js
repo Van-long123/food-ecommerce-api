@@ -21,6 +21,10 @@ export const CLOSE_DB= async () => {
   await mongoClientInstance.close()
 }
 
+export const GET_CLIENT = () => {
+  return mongoClientInstance
+}
+
 export const GET_DB = () => {
   if (!foodDatabaseInstance) throw new Error('Must connect to Database first!')
   return foodDatabaseInstance

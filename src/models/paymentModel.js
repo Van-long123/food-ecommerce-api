@@ -1,4 +1,5 @@
 import Joi from 'joi'
+import { ObjectId } from 'mongodb'
 import { GET_DB } from '~/config/mongodb'
 
 const PAYMENT_COLLECTION_NAME = 'payments'
@@ -9,7 +10,7 @@ const PAYMENT_COLLECTION_SCHEMA = Joi.object({
   paymentMethod: Joi.string().valid('COD', 'PayOS', 'Momo').required(),
   amount: Joi.number().min(0).required(),
   currency: Joi.string().default('VND'),
-  status: Joi.string().valid('pending', 'completed', 'failed', 'cancelled').default('pending'),
+  status: Joi.string().valid('pending', 'completed', 'failed', 'cancelled', 'refunded').default('pending'),
   
   // PayOS / Momo specific fields
   transactionId: Joi.string().allow('').optional(), // ID từ phía provider
@@ -24,10 +25,20 @@ const validateBeforeCreate = async (data) => {
   return PAYMENT_COLLECTION_SCHEMA.validateAsync(data, { abortEarly: false })
 }
 
-const createNew = async (data) => {
+const createNew = async (data, options = {}) => {
   try {
     const validData = await validateBeforeCreate(data)
-    return await GET_DB().collection(PAYMENT_COLLECTION_NAME).insertOne(validData)
+    
+    // Convert to ObjectId and Date before saving
+    const persistData = {
+      ...validData,
+      orderId: new ObjectId(validData.orderId),
+      userId: new ObjectId(validData.userId),
+      createdAt: new Date(validData.createdAt),
+      updatedAt: validData.updatedAt ? new Date(validData.updatedAt) : null
+    }
+
+    return await GET_DB().collection(PAYMENT_COLLECTION_NAME).insertOne(persistData, options)
   } catch (error) {
     throw new Error(error)
   }
@@ -37,12 +48,12 @@ const updateStatus = async (paymentId, status, rawResponse = null) => {
   try {
     const updateData = {
       status,
-      updatedAt: Date.now()
+      updatedAt: new Date()
     }
     if (rawResponse) updateData.rawResponse = rawResponse
 
     return await GET_DB().collection(PAYMENT_COLLECTION_NAME).findOneAndUpdate(
-      { _id: paymentId },
+      { _id: new ObjectId(paymentId) },
       { $set: updateData },
       { returnDocument: 'after' }
     )

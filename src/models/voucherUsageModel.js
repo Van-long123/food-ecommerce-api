@@ -2,6 +2,8 @@ import Joi from 'joi'
 import { GET_DB } from '~/config/mongodb'
 import { voucherModel } from './voucherModel'
 import { ObjectId } from 'mongodb'
+import { StatusCodes } from 'http-status-codes'
+import ApiError from '~/utils/ApiError'
 
 const VOUCHER_USAGE_COLLECTION_NAME = 'voucher_usages'
 
@@ -18,32 +20,51 @@ const VOUCHER_USAGE_SCHEMA = Joi.object({
 const countUsageByUser = async (voucherId, userId) => {
   try {
     return await GET_DB().collection(VOUCHER_USAGE_COLLECTION_NAME).countDocuments({
-      voucherId: String(voucherId),
-      userId: String(userId)
+      voucherId: new ObjectId(voucherId),
+      userId: new ObjectId(userId)
     })
   } catch (error) {
-    throw new Error(error)
+    throw error
   }
 }
 
 /**
  * Ghi lại usage khi user dùng voucher
  */
-const recordUsage = async ({ voucherId, userId, orderId = null }) => {
+const recordUsage = async ({ voucherId, userId, orderId = null }, options = {}) => {
   try {
+    const { session, maxUsage } = options
     const usage = await VOUCHER_USAGE_SCHEMA.validateAsync({
       voucherId: String(voucherId),
       userId: String(userId),
       orderId
     })
 
-    await GET_DB().collection(VOUCHER_USAGE_COLLECTION_NAME).insertOne(usage)
+    const voucherFilter = { _id: new ObjectId(voucherId) }
+    if (Number.isFinite(maxUsage)) {
+      voucherFilter.usedCount = { $lt: maxUsage }
+    }
 
-    // Tăng usedCount bên Voucher
-    await GET_DB().collection(voucherModel.VOUCHER_COLLECTION_NAME).updateOne(
-      { _id: new ObjectId(voucherId) },
-      { $inc: { usedCount: 1 } }
+    const updateResult = await GET_DB().collection(voucherModel.VOUCHER_COLLECTION_NAME).updateOne(
+      voucherFilter,
+      { $inc: { usedCount: 1 } },
+      { session }
     )
+
+    if (Number.isFinite(maxUsage) && updateResult.modifiedCount === 0) {
+      throw new ApiError(StatusCodes.CONFLICT, 'Mã giảm giá đã hết lượt sử dụng!')
+    }
+
+    // Convert to ObjectId and Date before saving
+    const persistUsage = {
+      ...usage,
+      voucherId: new ObjectId(usage.voucherId),
+      userId: new ObjectId(usage.userId),
+      orderId: usage.orderId ? new ObjectId(usage.orderId) : null,
+      usedAt: new Date(usage.usedAt)
+    }
+
+    await GET_DB().collection(VOUCHER_USAGE_COLLECTION_NAME).insertOne(persistUsage, { session })
   } catch (error) {
     throw new Error(error)
   }

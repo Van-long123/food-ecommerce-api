@@ -1,4 +1,5 @@
 import Joi from 'joi'
+import { ObjectId } from 'mongodb'
 import { GET_DB } from '~/config/mongodb'
 
 const REVIEW_STATUSES = {
@@ -27,7 +28,12 @@ const validateBeforeCreate = async (data) => {
 const createNew = async (data) => {
   try {
     const validData = await validateBeforeCreate(data)
-    const created = await GET_DB().collection(REVIEW_COLLECTION_NAME).insertOne(validData)
+    const persistData = {
+      ...validData,
+      productId: new ObjectId(validData.productId),
+      userId: new ObjectId(validData.userId)
+    }
+    const created = await GET_DB().collection(REVIEW_COLLECTION_NAME).insertOne(persistData)
     return created
   } catch (error) {
     throw new Error(error)

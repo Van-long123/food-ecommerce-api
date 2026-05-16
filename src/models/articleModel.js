@@ -62,7 +62,11 @@ const validateBeforeCreate = async (data) => {
 const createNew = async (data) => {
   try {
     const validData = await validateBeforeCreate(data)
-    const result = await GET_DB().collection(ARTICLE_COLLECTION_NAME).insertOne(validData)
+    const persistData = {
+      ...validData,
+      primary_category_id: validData.primary_category_id ? new ObjectId(validData.primary_category_id) : null
+    }
+    const result = await GET_DB().collection(ARTICLE_COLLECTION_NAME).insertOne(persistData)
     return result
   } catch (error) {
     throw new Error(error)
@@ -301,9 +305,14 @@ const update = async (id, updateData) => {
     Object.keys(updateData).forEach(field => {
       if (INVALID_UPDATE_FIELDS.includes(field)) delete updateData[field]
     })
+    const persistUpdateData = { ...updateData }
+    if (persistUpdateData.primary_category_id) {
+      persistUpdateData.primary_category_id = new ObjectId(persistUpdateData.primary_category_id)
+    }
+
     const result = await GET_DB().collection(ARTICLE_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(id) },
-      { $set: updateData },
+      { $set: persistUpdateData },
       { returnDocument: 'after' }
     )
     return result

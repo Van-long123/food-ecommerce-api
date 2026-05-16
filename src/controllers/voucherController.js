@@ -5,7 +5,8 @@ import { voucherService } from '~/services/voucherService'
 
 const getListClient = async (req, res, next) => {
   try {
-    const result = await voucherService.getListClient(req.query)
+    const accountId = req.jwtDecoded ? req.jwtDecoded._id : null
+    const result = await voucherService.getListClient(req.query, accountId)
     res.status(StatusCodes.OK).json(result)
   } catch (error) { next(error) }
 }

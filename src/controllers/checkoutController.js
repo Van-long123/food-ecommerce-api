@@ -17,6 +17,21 @@ const getShippingFee = async (req, res, next) => {
   }
 }
 
+const createCodCheckout = async (req, res, next) => {
+  try {
+    const userId = req.jwtDecoded._id
+    const result = await checkoutService.createCodCheckout(userId, req.body)
+
+    res.status(StatusCodes.CREATED).json({
+      success: true,
+      data: result
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const checkoutController = {
-  getShippingFee
+  getShippingFee,
+  createCodCheckout
 }

@@ -64,7 +64,15 @@ const validateBeforeCreate = async (data) => {
 const createNew = async (data) => {
   try {
     const validData = await validateBeforeCreate(data)
-    return await GET_DB().collection(VOUCHER_COLLECTION_NAME).insertOne(validData)
+    const persistData = {
+      ...validData,
+      applyForIds: validData.applyForIds.map(id => new ObjectId(id)),
+      createdAt: validData.createdAt ? new Date(validData.createdAt) : new Date()
+    }
+    if (persistData.createdBy?.createdAt) {
+      persistData.createdBy.createdAt = new Date(persistData.createdBy.createdAt)
+    }
+    return await GET_DB().collection(VOUCHER_COLLECTION_NAME).insertOne(persistData)
   } catch (error) {
     throw new Error(error)
   }
@@ -88,9 +96,14 @@ const findOneByCode = async (code) => {
 
 const update = async (id, updateData) => {
   try {
+    const persistUpdateData = { ...updateData, updatedAt: new Date() }
+    if (Array.isArray(persistUpdateData.applyForIds)) {
+      persistUpdateData.applyForIds = persistUpdateData.applyForIds.map(id => new ObjectId(id))
+    }
+
     return await GET_DB().collection(VOUCHER_COLLECTION_NAME).findOneAndUpdate(
       { _id: new ObjectId(id) },
-      { $set: { ...updateData, updatedAt: new Date() } },
+      { $set: persistUpdateData },
       { returnDocument: 'after' }
     )
   } catch (error) {
