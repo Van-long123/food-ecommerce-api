@@ -70,8 +70,21 @@ const recordUsage = async ({ voucherId, userId, orderId = null }, options = {}) 
   }
 }
 
+const deleteUsageByOrderId = async (orderId, options = {}) => {
+  try {
+    const { session } = options
+    return await GET_DB().collection(VOUCHER_USAGE_COLLECTION_NAME).deleteOne(
+      { orderId: new ObjectId(orderId) },
+      { session }
+    )
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const voucherUsageModel = {
   VOUCHER_USAGE_COLLECTION_NAME,
   countUsageByUser,
-  recordUsage
+  recordUsage,
+  deleteUsageByOrderId
 }

@@ -33,7 +33,60 @@ const createNew = async (req, res, next) => {
   }
 }
 
+const getMyOrders = async (req, res, next) => {
+  try {
+    const userId = req.jwtDecoded._id
+    
+    const result = await orderService.getOrdersByUserId(userId)
+    
+    res.status(StatusCodes.OK).json({
+      success: true,
+      message: 'Lấy danh sách đơn hàng thành công',
+      data: result
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getOrderDetails = async (req, res, next) => {
+  try {
+    const userId = req.jwtDecoded._id
+    const orderId = req.params.id
+    
+    const result = await orderService.getOrderDetails(orderId, userId)
+    
+    res.status(StatusCodes.OK).json({
+      success: true,
+      message: 'Lấy thông tin đơn hàng thành công',
+      data: result
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+const cancelOrder = async (req, res, next) => {
+  try {
+    const userId = req.jwtDecoded._id
+    const orderId = req.params.id
+    
+    const result = await orderService.cancelOrder(orderId, userId)
+    
+    res.status(StatusCodes.OK).json({
+      success: true,
+      message: result.message,
+      data: result
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const orderController = {
   validateStock,
-  createNew
+  createNew,
+  getMyOrders,
+  getOrderDetails,
+  cancelOrder
 }

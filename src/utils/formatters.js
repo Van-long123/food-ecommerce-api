@@ -32,3 +32,17 @@ export const slugify = (val) => {
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
 }
+
+export const formatCurrency = (amount) => {
+  return new Intl.NumberFormat('vi-VN', {
+    style: 'currency',
+    currency: 'VND',
+  }).format(amount);
+};
+
+export const formatDate = (date) => {
+  return new Intl.DateTimeFormat('vi-VN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(date));
+};

@@ -15,8 +15,6 @@ const ORDER_COLLECTION_SCHEMA = Joi.object({
     province: Joi.string().required(),
     note: Joi.string().allow('').optional()
   }).required(),
-  paymentMethod: Joi.number().valid(0, 1, 2).required(), // 0: COD, 1: PayOS, 2: Momo
-  paymentStatus: Joi.string().valid('pending', 'completed', 'failed', 'cancelled', 'refunded').default('pending'),
   voucherCode: Joi.string().allow('', null).optional(),
   discountVoucher: Joi.number().min(0).default(0),
   shippingFee: Joi.number().min(0).default(0),
@@ -54,7 +52,77 @@ const createNew = async (data, options = {}) => {
   }
 }
 
+const findByUserId = async (userId) => {
+  try {
+    return await GET_DB().collection(ORDER_COLLECTION_NAME).aggregate([
+      { $match: { userId: new ObjectId(userId) } },
+      { $sort: { createdAt: -1 } },
+      {
+        $lookup: {
+          from: 'order_items',
+          localField: '_id',
+          foreignField: 'orderId',
+          as: 'items'
+        }
+      },
+      {
+        $lookup: {
+          from: 'payments',
+          localField: '_id',
+          foreignField: 'orderId',
+          as: 'payment'
+        }
+      }
+    ]).toArray()
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const findByIdAndUserId = async (orderId, userId) => {
+  try {
+    const result = await GET_DB().collection(ORDER_COLLECTION_NAME).aggregate([
+      { $match: { _id: new ObjectId(orderId), userId: new ObjectId(userId) } },
+      {
+        $lookup: {
+          from: 'order_items',
+          localField: '_id',
+          foreignField: 'orderId',
+          as: 'items'
+        }
+      },
+      {
+        $lookup: {
+          from: 'payments',
+          localField: '_id',
+          foreignField: 'orderId',
+          as: 'payment' // Use payment instead of payments since we usually expect one payment per order, though it returns array. We can get the first one in service
+        }
+      }
+    ]).toArray()
+    
+    return result[0] || null
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const updateStatus = async (orderId, userId, status, options = {}) => {
+  try {
+    return await GET_DB().collection(ORDER_COLLECTION_NAME).findOneAndUpdate(
+      { _id: new ObjectId(orderId), userId: new ObjectId(userId) },
+      { $set: { status, updatedAt: new Date() } },
+      { returnDocument: 'after', ...options }
+    )
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const orderModel = {
   ORDER_COLLECTION_NAME,
-  createNew
+  createNew,
+  findByUserId,
+  findByIdAndUserId,
+  updateStatus
 }

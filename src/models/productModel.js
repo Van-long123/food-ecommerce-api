@@ -133,6 +133,21 @@ const decreaseStockIfAvailable = async (productId, quantity, options = {}) => {
     throw new Error(error)
   }
 }
+
+const increaseStock = async (productId, quantity, options = {}) => {
+  try {
+    const qty = Math.max(1, Number(quantity || 0))
+    if (!ObjectId.isValid(productId) || qty <= 0) return { matchedCount: 0, modifiedCount: 0 }
+
+    return await GET_DB().collection(PRODUCT_COLLECTION_NAME).updateOne(
+      { _id: new ObjectId(productId) },
+      { $inc: { stock: qty } },
+      options
+    )
+  } catch (error) {
+    throw new Error(error)
+  }
+}
 /**
  * Chi tiết product kèm:
  *  - primary_category: thông tin category chính (lookup bằng primary_category_id)
@@ -839,6 +854,7 @@ export const productModel = {
   softDelete,
   getCampaignProducts,
   decreaseStockIfAvailable,
+  increaseStock,
   getPaginatedCampaignProducts,
   getProductsByCategory,
   getListByPrimaryCategory,

@@ -11,6 +11,9 @@ import { orderService } from "~/services/orderService";
 import { cartService } from "~/services/cartService";
 import { voucherValidationService } from "~/services/voucherValidationService";
 import { GET_CLIENT } from "~/config/mongodb";
+import { sendMail } from "~/utils/sendMail";
+import { getCodOrderTemplate } from "~/templates/emailTemplates";
+import { userModel } from "~/models/userModel";
 
 /**
  * Tính phí vận chuyển cho địa chỉ được chọn.
@@ -225,8 +228,6 @@ const createCodCheckout = async (userId, payload) => {
           province: address.province,
           note: note || "",
         },
-        paymentMethod: 0,
-        paymentStatus: "pending",
         voucherCode: voucherCode || null,
         discountVoucher,
         shippingFee: Number(shippingFee || 0),
@@ -278,11 +279,39 @@ const createCodCheckout = async (userId, payload) => {
       );
 
       paymentId = paymentResult.insertedId.toString();
+      // throw new Error("TEST_ROLLBACK: Lỗi giả lập ở bước cuối cùng");
     });
 
     // 5. Sau khi thanh toán thành công, xóa các sản phẩm này khỏi giỏ hàng
     const productIdsToRemove = normalizedItems.map((item) => item.productId);
     await cartService.removeItems(userId, productIdsToRemove);
+
+    // 6. Gửi email thông báo đơn hàng (Bất đồng bộ)
+    try {
+      userModel.findOneById(userId).then(user => {
+        if (user && user.email) {
+          const emailHtml = getCodOrderTemplate({
+            orderId: createdOrderId,
+            customerName: address.username,
+            customerPhone: address.phone,
+            customerAddress: `${address.address}, ${address.ward}, ${address.district}, ${address.province}`,
+            items: orderItems,
+            shippingFee: Number(shippingFee || 0),
+            discountVoucher,
+            totalPay,
+            orderDate: new Date(),
+          });
+          
+          sendMail(
+            user.email,
+            `Xác nhận đơn hàng #${createdOrderId} - SmartFood`,
+            emailHtml
+          ).catch(err => console.error("Lỗi gửi email xác nhận đơn hàng:", err));
+        }
+      }).catch(err => console.error("Lỗi lấy thông tin user để gửi email:", err));
+    } catch (error) {
+      console.error("Lỗi không mong muốn trong quá trình chuẩn bị gửi email:", error);
+    }
 
     return {
       orderId: createdOrderId,

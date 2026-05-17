@@ -156,6 +156,18 @@ const getList = async ({ queryConditions = [], page = 1, limit = 50, sort = { is
 
 
 
+const decreaseUsedCount = async (voucherId, options = {}) => {
+  try {
+    return await GET_DB().collection(VOUCHER_COLLECTION_NAME).updateOne(
+      { _id: new ObjectId(voucherId), usedCount: { $gt: 0 } },
+      { $inc: { usedCount: -1 } },
+      options
+    )
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
 export const voucherModel = {
   VOUCHER_COLLECTION_NAME,
   VOUCHER_TYPES,
@@ -166,5 +178,6 @@ export const voucherModel = {
   findOneByCode,
   update,
   softDelete,
-  getList
+  getList,
+  decreaseUsedCount
 }
