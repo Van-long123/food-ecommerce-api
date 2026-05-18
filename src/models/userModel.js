@@ -56,12 +56,22 @@ const USER_COLLECTION_SCHEMA = Joi.object({
       }),
     )
     .default([]),
-  createdAt: Joi.date().timestamp("javascript").default(Date.now),
-  updatedAt: Joi.date().timestamp("javascript").default(null),
   deleted: Joi.boolean().default(false),
+  createdBy: Joi.object({
+    account_id: Joi.string(),
+    email: Joi.string()
+      .required()
+      .pattern(EMAIL_RULE)
+      .message(EMAIL_RULE_MESSAGE),
+  })
+    .allow(null)
+    .default(null),
   deletedBy: Joi.object({
     account_id: Joi.string(),
-    deletedAt: Joi.date(),
+    email: Joi.string()
+      .required()
+      .pattern(EMAIL_RULE)
+      .message(EMAIL_RULE_MESSAGE),
   })
     .allow(null)
     .default(null),
@@ -69,10 +79,16 @@ const USER_COLLECTION_SCHEMA = Joi.object({
     .items(
       Joi.object({
         account_id: Joi.string(),
-        updatedAt: Joi.date(),
+        email: Joi.string()
+          .required()
+          .pattern(EMAIL_RULE)
+          .message(EMAIL_RULE_MESSAGE),
       }),
     )
     .default([]),
+  createdAt: Joi.date().default(Date.now),
+  deletedAt: Joi.date().default(null),
+  updatedAt: Joi.date().default(null),
 });
 
 const INVALID_UPDATE_FIELDS = [

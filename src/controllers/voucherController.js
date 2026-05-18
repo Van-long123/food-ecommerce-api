@@ -37,14 +37,14 @@ const createNew = async (req, res, next) => {
 
 const updateVoucher = async (req, res, next) => {
   try {
-    const result = await voucherService.updateVoucher(req.params.id, req.body)
+    const result = await voucherService.updateVoucher(req.params.id, req.body, req.jwtDecoded._id)
     res.status(StatusCodes.OK).json(result)
   } catch (error) { next(error) }
 }
 
 const deleteVoucher = async (req, res, next) => {
   try {
-    const result = await voucherService.deleteVoucher(req.params.id)
+    const result = await voucherService.deleteVoucher(req.params.id, req.jwtDecoded._id)
     res.status(StatusCodes.OK).json(result)
   } catch (error) { next(error) }
 }

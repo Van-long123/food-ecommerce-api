@@ -143,50 +143,6 @@ const updateStatus = async (orderId, userId, status, options = {}) => {
   }
 };
 
-// const hasDeliveredOrderWithProduct = async (userId, productId) => {
-//   try {
-//     if (!ObjectId.isValid(userId) || !ObjectId.isValid(productId)) return false;
-
-//     const result = await GET_DB()
-//       .collection(ORDER_COLLECTION_NAME)
-//       .aggregate([
-//         {
-//           $match: {
-//             userId: new ObjectId(userId),
-//             status: "delivered",
-//           },
-//         },
-//         {
-//           $lookup: {
-//             from: "order_items",
-//             let: { orderId: "$_id" },
-//             pipeline: [
-//               {
-//                 $match: {
-//                   $expr: {
-//                     $and: [
-//                       { $eq: ["$orderId", "$$orderId"] },
-//                       { $eq: ["$productId", new ObjectId(productId)] },
-//                     ],
-//                   },
-//                 },
-//               },
-//               { $limit: 1 },
-//             ],
-//             as: "matchedItems",
-//           },
-//         },
-//         { $match: { "matchedItems.0": { $exists: true } } },
-//         { $limit: 1 },
-//       ])
-//       .toArray();
-
-//     return result.length > 0;
-//   } catch (error) {
-//     throw new Error(error);
-//   }
-// };
-
 const listDeliveredOrderIdsByProduct = async (userId, productId) => {
   try {
     if (!ObjectId.isValid(userId) || !ObjectId.isValid(productId)) return [];
@@ -238,6 +194,5 @@ export const orderModel = {
   findByUserId,
   findByIdAndUserId,
   updateStatus,
-  // hasDeliveredOrderWithProduct,
   listDeliveredOrderIdsByProduct,
 };

@@ -1,6 +1,7 @@
 import Joi from "joi";
 import { ObjectId } from "mongodb";
 import { GET_DB } from "~/config/mongodb";
+import { EMAIL_RULE, EMAIL_RULE_MESSAGE } from "~/utils/validators";
 
 const CATEGORY_TYPES = {
   PRODUCT: "product",
@@ -34,12 +35,18 @@ const CATEGORY_COLLECTION_SCHEMA = Joi.object({
     .default(null),
   deleted: Joi.boolean().default(false),
   createdBy: Joi.object({
-    account_id: Joi.string().required(),
-    createdAt: Joi.date().default(Date.now),
+    account_id: Joi.string(),
+    email: Joi.string()
+      .required()
+      .pattern(EMAIL_RULE)
+      .message(EMAIL_RULE_MESSAGE),
   }).required(),
   deletedBy: Joi.object({
     account_id: Joi.string(),
-    deletedAt: Joi.date(),
+    email: Joi.string()
+      .required()
+      .pattern(EMAIL_RULE)
+      .message(EMAIL_RULE_MESSAGE),
   })
     .allow(null)
     .default(null),
@@ -47,11 +54,15 @@ const CATEGORY_COLLECTION_SCHEMA = Joi.object({
     .items(
       Joi.object({
         account_id: Joi.string(),
-        updatedAt: Joi.date(),
+        email: Joi.string()
+          .required()
+          .pattern(EMAIL_RULE)
+          .message(EMAIL_RULE_MESSAGE),
       }),
     )
     .default([]),
   createdAt: Joi.date().default(Date.now),
+  deletedAt: Joi.date().default(null),
   updatedAt: Joi.date().default(null),
 });
 
@@ -232,14 +243,15 @@ const update = async (id, updateData) => {
   }
 };
 
-const pushUpdatedBy = async (id, actorId) => {
+const pushUpdatedBy = async (id, actorId, actorEmail) => {
   try {
     await GET_DB()
       .collection(CATEGORY_COLLECTION_NAME)
       .updateOne(
         { _id: new ObjectId(id) },
         {
-          $push: { updatedBy: { account_id: actorId, updatedAt: new Date() } },
+          $push: { updatedBy: { account_id: actorId, email: actorEmail } },
+          $set: { updatedAt: new Date() }
         },
       );
   } catch (error) {
@@ -247,7 +259,7 @@ const pushUpdatedBy = async (id, actorId) => {
   }
 };
 
-const softDelete = async (id, actorId) => {
+const softDelete = async (id, actorId, actorEmail) => {
   try {
     const result = await GET_DB()
       .collection(CATEGORY_COLLECTION_NAME)
@@ -256,8 +268,8 @@ const softDelete = async (id, actorId) => {
         {
           $set: {
             deleted: true,
-            updatedAt: new Date(),
-            deletedBy: { account_id: actorId, deletedAt: new Date() },
+            deletedAt: new Date(),
+            deletedBy: { account_id: actorId, email: actorEmail },
           },
         },
         { returnDocument: "after" },

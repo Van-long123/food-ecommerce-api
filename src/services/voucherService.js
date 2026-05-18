@@ -1,6 +1,9 @@
+import { StatusCodes } from 'http-status-codes'
+import ApiError from '~/utils/ApiError'
 import { voucherModel } from '~/models/voucherModel'
 import { voucherUsageModel } from '~/models/voucherUsageModel'
 import { voucherValidationService } from '~/services/voucherValidationService'
+import { userModel } from '~/models/userModel'
 
 const parsePositiveInt = (val, defaultVal) => {
   const n = parseInt(val)
@@ -92,6 +95,9 @@ const getListAdmin = async (query) => {
 }
 
 const createNew = async (reqBody, actorId) => {
+  const actor = await userModel.findOneById(actorId)
+  if (!actor) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản người thực hiện!')
+
   const data = {
     code: String(reqBody.code || '').toUpperCase().trim(),
     name: reqBody.name,
@@ -109,16 +115,20 @@ const createNew = async (reqBody, actorId) => {
     usedCount: 0,
     usageLimitPerUser: Number(reqBody.usageLimitPerUser || 1),
     isFeatured: Boolean(reqBody.isFeatured),
-    createdBy: { account_id: actorId, createdAt: new Date() }
+    createdBy: { account_id: actorId, email: actor.email }
   }
   const existing = await voucherModel.findOneByCode(data.code)
   if (existing) throw new ApiError(StatusCodes.CONFLICT, `Mã voucher "${data.code}" đã tồn tại!`)
   return await voucherModel.createNew(data)
 }
 
-const updateVoucher = async (id, reqBody) => {
+const updateVoucher = async (id, reqBody, actorId) => {
   const voucher = await voucherModel.findOneById(id)
   if (!voucher || voucher.deleted) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy voucher!')
+
+  const actor = await userModel.findOneById(actorId)
+  if (!actor) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản người thực hiện!')
+
   const updateData = { ...reqBody }
   delete updateData._id
   delete updateData.createdBy
@@ -126,13 +136,19 @@ const updateVoucher = async (id, reqBody) => {
   if (updateData.startDate) updateData.startDate = new Date(updateData.startDate)
   if (updateData.endDate) updateData.endDate = new Date(updateData.endDate)
   if (updateData.code) updateData.code = String(updateData.code).toUpperCase().trim()
+
+  await voucherModel.pushUpdatedBy(id, actorId, actor.email)
   return await voucherModel.update(id, updateData)
 }
 
-const deleteVoucher = async (id) => {
+const deleteVoucher = async (id, actorId) => {
   const voucher = await voucherModel.findOneById(id)
   if (!voucher || voucher.deleted) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy voucher!')
-  return await voucherModel.softDelete(id)
+
+  const actor = await userModel.findOneById(actorId)
+  if (!actor) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản người thực hiện!')
+
+  return await voucherModel.softDelete(id, actorId, actor.email)
 }
 
 export const voucherService = {

@@ -1,6 +1,7 @@
 import Joi from "joi";
 import { ObjectId } from "mongodb";
 import { GET_DB } from "~/config/mongodb";
+import { EMAIL_RULE, EMAIL_RULE_MESSAGE } from "~/utils/validators";
 
 const VOUCHER_COLLECTION_NAME = "vouchers";
 
@@ -52,11 +53,35 @@ const VOUCHER_COLLECTION_SCHEMA = Joi.object({
 
   isFeatured: Joi.boolean().default(false),
   deleted: Joi.boolean().default(false),
-
   createdBy: Joi.object({
-    account_id: Joi.string().required(),
-    createdAt: Joi.date().default(Date.now),
+    account_id: Joi.string(),
+    email: Joi.string()
+      .required()
+      .pattern(EMAIL_RULE)
+      .message(EMAIL_RULE_MESSAGE),
   }).required(),
+  deletedBy: Joi.object({
+    account_id: Joi.string(),
+    email: Joi.string()
+      .required()
+      .pattern(EMAIL_RULE)
+      .message(EMAIL_RULE_MESSAGE),
+  })
+    .allow(null)
+    .default(null),
+  updatedBy: Joi.array()
+    .items(
+      Joi.object({
+        account_id: Joi.string(),
+        email: Joi.string()
+          .required()
+          .pattern(EMAIL_RULE)
+          .message(EMAIL_RULE_MESSAGE),
+      }),
+    )
+    .default([]),
+  createdAt: Joi.date().default(Date.now),
+  deletedAt: Joi.date().default(null),
   updatedAt: Joi.date().default(null),
 });
 
@@ -130,15 +155,38 @@ const update = async (id, updateData) => {
   }
 };
 
-const softDelete = async (id) => {
+const pushUpdatedBy = async (id, actorId, actorEmail) => {
   try {
-    return await GET_DB()
+    await GET_DB()
+      .collection(VOUCHER_COLLECTION_NAME)
+      .updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $push: { updatedBy: { account_id: actorId, email: actorEmail } },
+          $set: { updatedAt: new Date() }
+        },
+      );
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const softDelete = async (id, actorId, actorEmail) => {
+  try {
+    const result = await GET_DB()
       .collection(VOUCHER_COLLECTION_NAME)
       .findOneAndUpdate(
         { _id: new ObjectId(id) },
-        { $set: { deleted: true, updatedAt: new Date() } },
+        {
+          $set: {
+            deleted: true,
+            deletedAt: new Date(),
+            deletedBy: { account_id: actorId, email: actorEmail },
+          },
+        },
         { returnDocument: "after" },
       );
+    return result;
   } catch (error) {
     throw new Error(error);
   }
@@ -206,6 +254,7 @@ export const voucherModel = {
   findOneById,
   findOneByCode,
   update,
+  pushUpdatedBy,
   softDelete,
   getList,
   decreaseUsedCount,

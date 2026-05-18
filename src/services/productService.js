@@ -4,6 +4,7 @@ import { categoryProductModel } from '~/models/categoryProductModel'
 import { categoryModel } from '~/models/categoryModel'
 import { reviewModel } from '~/models/reviewModel'
 import { orderModel } from '~/models/orderModel'
+import { userModel } from '~/models/userModel'
 import ApiError from '~/utils/ApiError'
 import { slugify } from '~/utils/formatters'
 
@@ -54,6 +55,9 @@ const createNew = async (reqBody, actorId) => {
   try {
     const slug = await generateUniqueSlug(reqBody.title, reqBody.slug)
 
+    const actor = await userModel.findOneById(actorId)
+    if (!actor) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản người thực hiện!')
+
     const newProduct = {
       title: reqBody.title,
       slug,
@@ -73,7 +77,7 @@ const createNew = async (reqBody, actorId) => {
       ratings: reqBody.ratings || { totalRating: 0, numberOfRatings: 0 },
       position: reqBody.position ?? 0,
       primary_category_id: reqBody.primary_category_id || null,
-      createdBy: { account_id: actorId, createdAt: new Date() }
+      createdBy: { account_id: actorId, email: actor.email }
     }
 
     const created = await productModel.createNew(newProduct)
@@ -149,6 +153,9 @@ const update = async (id, reqBody, actorId) => {
     const product = await productModel.findOneById(id)
     if (!product || product.deleted) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy sản phẩm!')
 
+    const actor = await userModel.findOneById(actorId)
+    if (!actor) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản người thực hiện!')
+
     const updateData = { ...reqBody, updatedAt: new Date() }
     delete updateData.createdBy
     delete updateData.createdAt
@@ -165,7 +172,7 @@ const update = async (id, reqBody, actorId) => {
         : slugCandidate
     }
 
-    await productModel.pushUpdatedBy(id, actorId)
+    await productModel.pushUpdatedBy(id, actorId, actor.email)
     await productModel.update(id, updateData)
 
     // Đồng bộ categories nếu có truyền category_ids
@@ -238,9 +245,13 @@ const softDelete = async (id, actorId) => {
   try {
     const product = await productModel.findOneById(id)
     if (!product || product.deleted) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy sản phẩm!')
+
+    const actor = await userModel.findOneById(actorId)
+    if (!actor) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản người thực hiện!')
+
     // Xoá mềm tất cả category mappings
     await categoryProductModel.deleteAllByProductId(id)
-    const result = await productModel.softDelete(id, actorId)
+    const result = await productModel.softDelete(id, actorId, actor.email)
     return result
   } catch (error) {
     throw error

@@ -48,6 +48,9 @@ const createNew = async (reqBody, actorId) => {
   try {
     const slug = await generateUniqueSlug(reqBody.title, reqBody.slug)
 
+    const actor = await userModel.findOneById(actorId)
+    if (!actor) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản người thực hiện!')
+
     const newArticle = {
       title: reqBody.title,
       slug,
@@ -63,7 +66,7 @@ const createNew = async (reqBody, actorId) => {
       primary_category_id: reqBody.primary_category_id || null,
       tags: reqBody.tags || [],
       comments: Array.isArray(reqBody.comments) ? reqBody.comments : [],
-      createdBy: { account_id: actorId, createdAt: new Date() }
+      createdBy: { account_id: actorId, email: actor.email }
     }
 
     const created = await articleModel.createNew(newArticle)
@@ -131,6 +134,9 @@ const update = async (id, reqBody, actorId) => {
     const article = await articleModel.findOneById(id)
     if (!article || article.deleted) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy bài viết!')
 
+    const actor = await userModel.findOneById(actorId)
+    if (!actor) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản người thực hiện!')
+
     const updateData = { ...reqBody, updatedAt: new Date() }
     delete updateData.createdBy
     delete updateData.createdAt
@@ -148,7 +154,7 @@ const update = async (id, reqBody, actorId) => {
 
     if (reqBody.publishedAt) updateData.publishedAt = new Date(reqBody.publishedAt)
 
-    await articleModel.pushUpdatedBy(id, actorId)
+    await articleModel.pushUpdatedBy(id, actorId, actor.email)
     await articleModel.update(id, updateData)
 
     if (Array.isArray(reqBody.category_ids)) {
@@ -217,8 +223,12 @@ const softDelete = async (id, actorId) => {
   try {
     const article = await articleModel.findOneById(id)
     if (!article || article.deleted) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy bài viết!')
+
+    const actor = await userModel.findOneById(actorId)
+    if (!actor) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản người thực hiện!')
+
     await categoryArticleModel.deleteAllByArticleId(id)
-    return await articleModel.softDelete(id, actorId)
+    return await articleModel.softDelete(id, actorId, actor.email)
   } catch (error) {
     throw error
   }
