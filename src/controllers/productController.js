@@ -78,6 +78,13 @@ const createReviewClient = async (req, res, next) => {
   } catch (error) { next(error) }
 }
 
+const getReviewEligibilityClient = async (req, res, next) => {
+  try {
+    const result = await productService.getReviewEligibilityClient(req.params.slug, req.jwtDecoded._id)
+    res.status(StatusCodes.OK).json({ success: true, ...result })
+  } catch (error) { next(error) }
+}
+
 const getRecommendations = async (req, res, next) => {
   try {
     const { id } = req.params
@@ -99,5 +106,6 @@ export const productController = {
   getListClient,
   getDetailClient,
   createReviewClient,
+  getReviewEligibilityClient,
   getRecommendations
 }

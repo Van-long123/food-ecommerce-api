@@ -78,7 +78,7 @@ const createNew = async (data) => {
 
 const findOneById = async (id) => {
   try {
-    return await GET_DB().collection(PRODUCT_COLLECTION_NAME).findOne({ _id: new ObjectId(id) })
+    return await GET_DB().collection(PRODUCT_COLLECTION_NAME).findOne({ _id: new ObjectId(id), deleted: false })
   } catch (error) {
     throw new Error(error)
   }
@@ -87,6 +87,19 @@ const findOneById = async (id) => {
 const findOneBySlug = async (slug) => {
   try {
     return await GET_DB().collection(PRODUCT_COLLECTION_NAME).findOne({ slug, deleted: false })
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+const findOneBySlugOrId = async (identifier) => {
+  try {
+    const identifierStr = String(identifier || '').trim()
+    const matchCondition = ObjectId.isValid(identifierStr)
+      ? { _id: new ObjectId(identifierStr), deleted: false }
+      : { slug: identifierStr, deleted: false }
+
+    return await GET_DB().collection(PRODUCT_COLLECTION_NAME).findOne(matchCondition)
   } catch (error) {
     throw new Error(error)
   }
@@ -859,5 +872,6 @@ export const productModel = {
   getProductsByCategory,
   getListByPrimaryCategory,
   // getByCategorySlug,
-  syncRatingsFromReviews
+  syncRatingsFromReviews,
+  findOneBySlugOrId
 }

@@ -16,6 +16,9 @@ Router.route('/:slug/details')
 Router.route('/:slug/reviews')
   .post(authMiddleware.isAuthorized, reviewValidation.createNew, productController.createReviewClient)
 
+Router.route('/:slug/review-eligibility')
+  .get(authMiddleware.isAuthorized, productController.getReviewEligibilityClient)
+
 // GET /v1/client/products/:id/recommendations → Sản phẩm gợi ý (gọi Python microservice)
 Router.route('/:id/recommendations')
   .get(productController.getRecommendations)

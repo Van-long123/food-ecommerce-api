@@ -3,6 +3,7 @@ import { productModel } from '~/models/productModel'
 import { categoryProductModel } from '~/models/categoryProductModel'
 import { categoryModel } from '~/models/categoryModel'
 import { reviewModel } from '~/models/reviewModel'
+import { orderModel } from '~/models/orderModel'
 import ApiError from '~/utils/ApiError'
 import { slugify } from '~/utils/formatters'
 
@@ -299,25 +300,87 @@ const getDetailClient = async (slug) => {
 
 const createReviewClient = async (slug, reqBody, userId) => {
   try {
-    const product = await productModel.findOneBySlug(slug)
+    const product = await productModel.findOneBySlugOrId(slug)
     if (!product) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy sản phẩm!')
 
-    const newReview = {
-      productId: product._id.toString(),
-      userId,
-      rating: reqBody.rating,
-      comment: reqBody.comment || '',
-      images: Array.isArray(reqBody.images) ? reqBody.images : [],
-      status: reviewModel.REVIEW_STATUSES.APPROVED,
-      createdAt: new Date()
+    const deliveredOrderIds = await orderModel.listDeliveredOrderIdsByProduct(userId, product._id.toString())
+    if (!deliveredOrderIds.length) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        'Bạn chỉ được đánh giá sản phẩm sau khi đã mua hàng thành công!'
+      )
     }
 
-    await reviewModel.createNew(newReview)
-    const ratings = await productModel.syncRatingsFromReviews(newReview.productId)
+    const existingReview = await reviewModel.findOneByUserAndProduct(product._id.toString(), userId)
+    const reviewedOrderIds = Array.isArray(existingReview?.orderIds)
+      ? existingReview.orderIds.map((id) => id.toString())
+      : []
+    const targetOrderId = deliveredOrderIds.find((id) => !reviewedOrderIds.includes(id)) || null
+
+    if (!targetOrderId) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        'Bạn đã đánh giá sản phẩm này. Hãy mua lại sản phẩm để có thể cập nhật đánh giá mới!'
+      )
+    }
+
+    if (existingReview) {
+      await reviewModel.updateReview(
+        existingReview._id.toString(),
+        {
+          rating: reqBody.rating,
+          comment: reqBody.comment || '',
+          images: Array.isArray(reqBody.images) ? reqBody.images : [],
+          status: reviewModel.REVIEW_STATUSES.APPROVED
+        },
+        targetOrderId
+      )
+    } else {
+      const newReview = {
+        productId: product._id.toString(),
+        userId,
+        rating: reqBody.rating,
+        comment: reqBody.comment || '',
+        images: Array.isArray(reqBody.images) ? reqBody.images : [],
+        orderIds: [targetOrderId],
+        status: reviewModel.REVIEW_STATUSES.APPROVED,
+        createdAt: new Date()
+      }
+
+      await reviewModel.createNew(newReview)
+    }
+
+    const ratings = await productModel.syncRatingsFromReviews(product._id.toString())
 
     return {
       message: 'Đánh giá sản phẩm thành công!',
       ratings
+    }
+  } catch (error) {
+    throw error
+  }
+}
+
+const getReviewEligibilityClient = async (slug, userId) => {
+  try {
+    const product = await productModel.findOneBySlugOrId(slug)
+    if (!product) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy sản phẩm!')
+
+    const deliveredOrderIds = await orderModel.listDeliveredOrderIdsByProduct(userId, product._id.toString())
+    if (!deliveredOrderIds.length) {
+      return { isEligible: false, existingReview: null, targetOrderId: null }
+    }
+
+    const existingReview = await reviewModel.findOneByUserAndProduct(product._id.toString(), userId)
+    const reviewedOrderIds = Array.isArray(existingReview?.orderIds)
+      ? existingReview.orderIds.map((id) => id.toString())
+      : []
+    const targetOrderId = deliveredOrderIds.find((id) => !reviewedOrderIds.includes(id)) || null
+
+    return {
+      isEligible: Boolean(targetOrderId),
+      existingReview: existingReview || null,
+      targetOrderId
     }
   } catch (error) {
     throw error
@@ -334,5 +397,6 @@ export const productService = {
   softDelete,
   getListClient,
   getDetailClient,
-  createReviewClient
+  createReviewClient,
+  getReviewEligibilityClient
 }
