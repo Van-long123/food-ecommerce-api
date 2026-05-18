@@ -48,5 +48,10 @@ export const env = {
   GHN_FALLBACK_FEE: process.env.GHN_FALLBACK_FEE,
 
   // Python Recommendation Microservice
-  RECOMMENDATION_SERVICE_URL: process.env.RECOMMENDATION_SERVICE_URL
+  RECOMMENDATION_SERVICE_URL: process.env.RECOMMENDATION_SERVICE_URL,
+
+  // PayOS Payment Gateway
+  PAYOS_CLIENT_ID: process.env.PAYOS_CLIENT_ID,
+  PAYOS_API_KEY: process.env.PAYOS_API_KEY,
+  PAYOS_CHECKSUM_KEY: process.env.PAYOS_CHECKSUM_KEY
 }

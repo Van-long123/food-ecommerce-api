@@ -7,14 +7,14 @@ const PAYMENT_COLLECTION_NAME = "payments";
 const PAYMENT_COLLECTION_SCHEMA = Joi.object({
   orderId: Joi.string().required().trim().strict(),
   userId: Joi.string().required().trim().strict(),
-  paymentMethod: Joi.string().valid("COD", "PayOS", "Momo").required(),
+  paymentMethod: Joi.string().valid("COD", "PayOS").required(),
   amount: Joi.number().min(0).required(),
   currency: Joi.string().default("VND"),
   status: Joi.string()
     .valid("pending", "completed", "failed", "cancelled", "refunded")
     .default("pending"),
 
-  // PayOS / Momo specific fields
+  // PayOS specific fields
   transactionId: Joi.string().allow("").optional(), // ID từ phía provider
   paymentUrl: Joi.string().allow("").optional(), // URL thanh toán (cho QR hoặc Redirect)
   rawResponse: Joi.object().optional(), // Lưu toàn bộ log từ provider trả về
@@ -82,9 +82,31 @@ const updateStatusByOrderId = async (orderId, status, options = {}) => {
   }
 };
 
+const updatePayOSCompleted = async (orderId, transactionId, rawResponse, options = {}) => {
+  try {
+    return await GET_DB()
+      .collection(PAYMENT_COLLECTION_NAME)
+      .findOneAndUpdate(
+        { orderId: new ObjectId(orderId) },
+        {
+          $set: {
+            status: 'completed',
+            transactionId: String(transactionId),
+            rawResponse,
+            updatedAt: new Date(),
+          },
+        },
+        { returnDocument: 'after', ...options },
+      );
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
 export const paymentModel = {
   PAYMENT_COLLECTION_NAME,
   createNew,
   updateStatus,
   updateStatusByOrderId,
+  updatePayOSCompleted,
 };

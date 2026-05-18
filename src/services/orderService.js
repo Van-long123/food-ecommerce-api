@@ -140,7 +140,7 @@ const getOrdersByUserId = async (userId) => {
     // Format response
     return orders.map((order) => ({
       _id: order._id,
-      code: order._id.toString().substring(18).toUpperCase(), // DH + 6 last chars of id
+      code: order.orderCode ? String(order.orderCode) : order._id.toString().substring(18).toUpperCase(), // Dùng orderCode nếu có, không thì fallback về 6 ký tự cuối của ID
       status: order.status,
       totalPrice: order.totalPrice,
       createdAt: order.createdAt,

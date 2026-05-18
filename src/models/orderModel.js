@@ -15,6 +15,7 @@ const ORDER_COLLECTION_SCHEMA = Joi.object({
     province: Joi.string().required(),
     note: Joi.string().allow("").optional(),
   }).required(),
+  orderCode: Joi.number().integer().optional(),
   voucherCode: Joi.string().allow("", null).optional(),
   discountVoucher: Joi.number().min(0).default(0),
   shippingFee: Joi.number().min(0).default(0),
@@ -188,11 +189,37 @@ const listDeliveredOrderIdsByProduct = async (userId, productId) => {
   }
 };
 
+const findByOrderCode = async (orderCode) => {
+  try {
+    return await GET_DB()
+      .collection(ORDER_COLLECTION_NAME)
+      .findOne({ orderCode: Number(orderCode) });
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const updateStatusById = async (orderId, status, options = {}) => {
+  try {
+    return await GET_DB()
+      .collection(ORDER_COLLECTION_NAME)
+      .findOneAndUpdate(
+        { _id: new ObjectId(orderId) },
+        { $set: { status, updatedAt: new Date() } },
+        { returnDocument: "after", ...options },
+      );
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
 export const orderModel = {
   ORDER_COLLECTION_NAME,
   createNew,
   findByUserId,
   findByIdAndUserId,
   updateStatus,
+  updateStatusById,
+  findByOrderCode,
   listDeliveredOrderIdsByProduct,
 };

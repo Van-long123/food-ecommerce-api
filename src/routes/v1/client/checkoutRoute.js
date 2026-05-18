@@ -21,4 +21,18 @@ router.post(
   checkoutController.createCodCheckout
 )
 
+// POST /v1/client/checkout/payos
+router.post(
+  '/payos',
+  authMiddleware.isAuthorized,
+  checkoutValidation.createCodCheckout, // Dùng chung schema với COD
+  checkoutController.createPayOSCheckout
+)
+
+// POST /v1/client/checkout/payos-webhook (Public - No Auth Middleware)
+router.post(
+  '/payos-webhook',
+  checkoutController.handlePayOSWebhook
+)
+
 export const clientCheckoutRoute = router
