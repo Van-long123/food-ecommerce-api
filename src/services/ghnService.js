@@ -1,3 +1,4 @@
+import axios from 'axios'
 import ApiError from '~/utils/ApiError'
 import { StatusCodes } from 'http-status-codes'
 import { GHN_HEADERS, GHN_MASTER_DATA_API, GHN_SHIPPING_ORDER_API, GHN_SHOP_HEADERS } from '~/utils/constants'
@@ -8,12 +9,11 @@ import { env } from '~/config/environment'
 const getProvinces = async () => {
 
 
-  const response = await fetch(`${GHN_MASTER_DATA_API}/province`, {
-    method: 'GET',
+  const response = await axios.get(`${GHN_MASTER_DATA_API}/province`, {
     headers: GHN_HEADERS
   })
 
-  const data = await response.json()
+  const data = response.data
   if (data.code !== 200) {
     throw new ApiError(StatusCodes.BAD_REQUEST, data.message || 'Lỗi khi lấy danh sách tỉnh/thành')
   }
@@ -27,12 +27,11 @@ const getDistricts = async (provinceId) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Thiếu province_id')
   }
 
-  const response = await fetch(`${GHN_MASTER_DATA_API}/district?province_id=${provinceId}`, {
-    method: 'GET',
+  const response = await axios.get(`${GHN_MASTER_DATA_API}/district?province_id=${provinceId}`, {
     headers: GHN_HEADERS
   })
 
-  const data = await response.json()
+  const data = response.data
   if (data.code !== 200) {
     throw new ApiError(StatusCodes.BAD_REQUEST, data.message || 'Lỗi khi lấy danh sách quận/huyện')
   }
@@ -46,12 +45,11 @@ const getWards = async (districtId) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Thiếu district_id')
   }
 
-  const response = await fetch(`${GHN_MASTER_DATA_API}/ward?district_id=${districtId}`, {
-    method: 'GET',
+  const response = await axios.get(`${GHN_MASTER_DATA_API}/ward?district_id=${districtId}`, {
     headers: GHN_HEADERS
   })
 
-  const data = await response.json()
+  const data = response.data
   if (data.code !== 200) {
     throw new ApiError(StatusCodes.BAD_REQUEST, data.message || 'Lỗi khi lấy danh sách phường/xã')
   }
@@ -69,13 +67,11 @@ const getAvailableServices = async (fromDistrictId, toDistrictId) => {
     to_district: Number(toDistrictId)
   }
 
-  const response = await fetch(`${GHN_SHIPPING_ORDER_API}/available-services`, {
-    method: 'POST',
-    headers: GHN_HEADERS,
-    body: JSON.stringify(body)
+  const response = await axios.post(`${GHN_SHIPPING_ORDER_API}/available-services`, body, {
+    headers: GHN_HEADERS
   })
 
-  const data = await response.json()
+  const data = response.data
   if (data.code !== 200) {
     throw new ApiError(StatusCodes.BAD_REQUEST, data.message || 'Lỗi khi lấy danh sách dịch vụ GHN')
   }
@@ -156,13 +152,11 @@ const getShippingFee = async ({ toDistrictId, toWardCode, products = [] }) => {
     items
   }
 
-  const response = await fetch(`${GHN_SHIPPING_ORDER_API}/fee`, {
-    method: 'POST',
-    headers: GHN_SHOP_HEADERS,
-    body: JSON.stringify(body)
+  const response = await axios.post(`${GHN_SHIPPING_ORDER_API}/fee`, body, {
+    headers: GHN_SHOP_HEADERS
   })
 
-  const data = await response.json()
+  const data = response.data
   if (data.code !== 200) {
     // Fallback fee nếu GHN trả lỗi
     const fallback = Number(env.GHN_FALLBACK_FEE) || 25000

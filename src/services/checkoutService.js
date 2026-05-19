@@ -183,6 +183,7 @@ const createCodCheckout = async (userId, payload) => {
         {
           code: voucherCode,
           orderValue: subtotal,
+          shippingFee: Number(shippingFee || 0),
           items: orderItems.map((item) => ({
             productId: item.productId,
             categoryId: item.categoryId,
@@ -457,6 +458,7 @@ const createPayOSCheckout = async (userId, payload) => {
         {
           code: voucherCode,
           orderValue: subtotal,
+          shippingFee: Number(shippingFee || 0),
           items: orderItems.map((item) => ({
             productId: item.productId,
             categoryId: item.categoryId,

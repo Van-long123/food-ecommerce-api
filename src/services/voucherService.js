@@ -65,11 +65,11 @@ const getListClient = async (query, accountId = null) => {
 
 /**
  * Validate mã giảm giá
- * Body: { code, orderValue }
+ * Body: { code, orderValue, items, shippingFee }
  */
-const validateVoucher = async ({ code, orderValue, items = [] }, accountId = null) => {
+const validateVoucher = async ({ code, orderValue, items = [], shippingFee = 0 }, accountId = null) => {
   return await voucherValidationService.validateVoucherForCheckout(
-    { code, orderValue, items },
+    { code, orderValue, items, shippingFee },
     accountId
   )
 }
