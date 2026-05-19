@@ -83,10 +83,28 @@ const cancelOrder = async (req, res, next) => {
   }
 }
 
+const confirmReceived = async (req, res, next) => {
+  try {
+    const userId = req.jwtDecoded._id
+    const orderId = req.params.id
+
+    const result = await orderService.confirmReceived(orderId, userId)
+
+    res.status(StatusCodes.OK).json({
+      success: true,
+      message: result.message,
+      data: result
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const orderController = {
   validateStock,
   createNew,
   getMyOrders,
   getOrderDetails,
-  cancelOrder
+  cancelOrder,
+  confirmReceived
 }

@@ -16,5 +16,7 @@ router.route('/:id')
   .get(authMiddleware.isAuthorized, orderController.getOrderDetails)
 router.route('/:id/cancel')
   .put(authMiddleware.isAuthorized, orderController.cancelOrder)
+router.route('/:id/received')
+  .put(authMiddleware.isAuthorized, orderController.confirmReceived)
 
 export const clientOrderRoute = router

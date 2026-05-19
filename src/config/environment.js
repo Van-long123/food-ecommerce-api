@@ -53,5 +53,7 @@ export const env = {
   // PayOS Payment Gateway
   PAYOS_CLIENT_ID: process.env.PAYOS_CLIENT_ID,
   PAYOS_API_KEY: process.env.PAYOS_API_KEY,
-  PAYOS_CHECKSUM_KEY: process.env.PAYOS_CHECKSUM_KEY
+  PAYOS_CHECKSUM_KEY: process.env.PAYOS_CHECKSUM_KEY,
+
+  ORDER_AUTO_COMPLETE_DAYS: process.env.ORDER_AUTO_COMPLETE_DAYS,
 }

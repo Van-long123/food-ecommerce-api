@@ -1,38 +1,32 @@
-import { StatusCodes } from 'http-status-codes'
-import { homeService } from '~/services/homeService'
-
-// const getLandingPageData = async (req, res, next) => {
-//   try {
-//     const result = await homeService.getLandingPageData()
-//     res.status(StatusCodes.OK).json(result)
-//   } catch (error) {
-//     next(error)
-//   }
-// }
+import { StatusCodes } from "http-status-codes";
+import { homeService } from "~/services/homeService";
 
 const getHomeAggregate = async (req, res, next) => {
   try {
-    const result = await homeService.getHomeAggregate(req.query)
-    res.status(StatusCodes.OK).json(result)
+    const result = await homeService.getHomeAggregate(req.query);
+    res.status(StatusCodes.OK).json(result);
   } catch (error) {
-    next(error)
+    next(error);
   }
-}
+};
 
 const getCampaignProducts = async (req, res, next) => {
   try {
-    const { slug } = req.params
-    const { page, limit } = req.query
-    const result = await homeService.getCampaignProductsBySlug(slug, { page, limit })
-    res.status(StatusCodes.OK).json(result)
+    const { slug } = req.params;
+    const { page, limit } = req.query;
+    const result = await homeService.getCampaignProductsBySlug(slug, {
+      page,
+      limit,
+    });
+    res.status(StatusCodes.OK).json(result);
   } catch (error) {
-    if (error.message === 'Campaign not found') {
-      res.status(StatusCodes.NOT_FOUND).json({ message: error.message })
+    if (error.message === "Campaign not found") {
+      res.status(StatusCodes.NOT_FOUND).json({ message: error.message });
     } else {
-      next(error)
+      next(error);
     }
   }
-}
+};
 
 // const getHomeCategoryProducts = async (req, res, next) => {
 //   try {
@@ -60,7 +54,7 @@ const getCampaignProducts = async (req, res, next) => {
 export const homeController = {
   // getLandingPageData,
   getHomeAggregate,
-  getCampaignProducts
+  getCampaignProducts,
   // getHomeCategoryProducts,
   // getHomeBlogs
-}
+};

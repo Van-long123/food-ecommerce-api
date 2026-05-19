@@ -213,6 +213,74 @@ const updateStatusById = async (orderId, status, options = {}) => {
   }
 };
 
+/**
+ * Cập nhật trạng thái đơn hàng kèm mốc deliveredAt (dùng khi xác nhận đã nhận hàng).
+ */
+const updateStatusWithDeliveredAt = async (
+  orderId,
+  userId,
+  status,
+  options = {},
+) => {
+  try {
+    const { expectedCurrentStatus, ...mongoOptions } = options;
+    const filter = { _id: new ObjectId(orderId) };
+    if (userId) filter.userId = new ObjectId(userId);
+    if (expectedCurrentStatus) filter.status = expectedCurrentStatus;
+
+    return await GET_DB()
+      .collection(ORDER_COLLECTION_NAME)
+      .findOneAndUpdate(
+        filter,
+        { $set: { status, deliveredAt: new Date(), updatedAt: new Date() } },
+        { returnDocument: "after", ...mongoOptions },
+      );
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+/**
+ * Tìm các đơn hàng có trạng thái 'shipping' đã quá thời hạn cho việc tự động hoàn thành.
+ * olderThanDays - Số ngày (tính từ updatedAt)
+ */
+const findShippingOrdersOlderThan = async (olderThanDays = 3) => {
+  try {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
+
+    return await GET_DB()
+      .collection(ORDER_COLLECTION_NAME)
+      .aggregate([
+        {
+          $match: {
+            status: "shipping",
+            updatedAt: { $lte: cutoffDate },
+          },
+        },
+        {
+          $lookup: {
+            from: "order_items",
+            localField: "_id",
+            foreignField: "orderId",
+            as: "items",
+          },
+        },
+        {
+          $lookup: {
+            from: "payments",
+            localField: "_id",
+            foreignField: "orderId",
+            as: "payment",
+          },
+        },
+      ])
+      .toArray();
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
 export const orderModel = {
   ORDER_COLLECTION_NAME,
   createNew,
@@ -220,6 +288,8 @@ export const orderModel = {
   findByIdAndUserId,
   updateStatus,
   updateStatusById,
+  updateStatusWithDeliveredAt,
+  findShippingOrdersOlderThan,
   findByOrderCode,
   listDeliveredOrderIdsByProduct,
 };

@@ -47,6 +47,7 @@ const PRODUCT_COLLECTION_SCHEMA = Joi.object({
     totalRating: Joi.number().min(0).default(0),
     numberOfRatings: Joi.number().integer().min(0).default(0),
   }).default({ totalRating: 0, numberOfRatings: 0 }),
+  soldCount: Joi.number().integer().min(0).default(0),
   position: Joi.number().integer().default(0),
   // Primary category (category chính, hiển thị breadcrumb / filter chính)
   primary_category_id: Joi.alternatives()
@@ -208,6 +209,30 @@ const increaseStock = async (productId, quantity, options = {}) => {
         { $inc: { stock: qty } },
         options,
       );
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+/**
+ * Tăng số lượng đã bán (soldCount) cho nhiều sản phẩm trong một Transaction session.
+ */
+const increaseSoldCountMany = async (items = [], options = {}) => {
+  try {
+    const ops = items
+      .filter(
+        (item) => ObjectId.isValid(item.productId) && Number(item.quantity) > 0,
+      )
+      .map((item) =>
+        GET_DB()
+          .collection(PRODUCT_COLLECTION_NAME)
+          .updateOne(
+            { _id: new ObjectId(item.productId) },
+            { $inc: { soldCount: Number(item.quantity) } },
+            options,
+          ),
+      );
+    await Promise.all(ops);
   } catch (error) {
     throw new Error(error);
   }
@@ -570,7 +595,7 @@ const pushUpdatedBy = async (id, actorId, actorEmail) => {
         { _id: new ObjectId(id) },
         {
           $push: { updatedBy: { account_id: actorId, email: actorEmail } },
-          $set: { updatedAt: new Date() }
+          $set: { updatedAt: new Date() },
         },
       );
   } catch (error) {
@@ -978,6 +1003,7 @@ export const productModel = {
   getCampaignProducts,
   decreaseStockIfAvailable,
   increaseStock,
+  increaseSoldCountMany,
   getPaginatedCampaignProducts,
   getProductsByCategory,
   getListByPrimaryCategory,

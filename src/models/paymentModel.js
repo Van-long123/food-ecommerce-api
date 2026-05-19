@@ -11,7 +11,7 @@ const PAYMENT_COLLECTION_SCHEMA = Joi.object({
   amount: Joi.number().min(0).required(),
   currency: Joi.string().default("VND"),
   status: Joi.string()
-    .valid("pending", "completed", "failed", "cancelled", "refunded")
+    .valid("pending", "completed", "cancelled", "refunded")
     .default("pending"),
 
   // PayOS specific fields
@@ -82,7 +82,12 @@ const updateStatusByOrderId = async (orderId, status, options = {}) => {
   }
 };
 
-const updatePayOSCompleted = async (orderId, transactionId, rawResponse, options = {}) => {
+const updatePayOSCompleted = async (
+  orderId,
+  transactionId,
+  rawResponse,
+  options = {},
+) => {
   try {
     return await GET_DB()
       .collection(PAYMENT_COLLECTION_NAME)
@@ -90,13 +95,13 @@ const updatePayOSCompleted = async (orderId, transactionId, rawResponse, options
         { orderId: new ObjectId(orderId) },
         {
           $set: {
-            status: 'completed',
+            status: "completed",
             transactionId: String(transactionId),
             rawResponse,
             updatedAt: new Date(),
           },
         },
-        { returnDocument: 'after', ...options },
+        { returnDocument: "after", ...options },
       );
   } catch (error) {
     throw new Error(error);

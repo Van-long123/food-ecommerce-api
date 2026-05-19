@@ -8,6 +8,7 @@ import { errorHandlingMiddleware } from './middlewares/errorHandlingMiddleware'
 import { env } from '~/config/environment'
 import { APIs_V1 } from '~/routes/v1/index'
 import passport from '~/config/passport'
+import { startOrderAutoCompleteJob } from '~/services/orderAutoCompleteJob'
 
 const START_SERVER = () => {
   const app = express()
@@ -58,6 +59,8 @@ const START_SERVER = () => {
     await CONNECT_DB()
     console.log('Connected to MongoDB Cloud Atlas!')
     START_SERVER()
+    // Khởi chạy job tự động hoàn thành đơn hàng sau khi DB kết nối thành công
+    startOrderAutoCompleteJob()
   } catch (error) {
     console.error(error)
     process.exit(0)
