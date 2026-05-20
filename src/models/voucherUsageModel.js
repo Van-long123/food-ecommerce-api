@@ -11,7 +11,7 @@ const VOUCHER_USAGE_SCHEMA = Joi.object({
   voucherId: Joi.string().required(),
   userId: Joi.string().required(),
   orderId: Joi.string().allow(null).default(null),
-  usedAt: Joi.date().default(Date.now)
+  usedAt: Joi.date().default(() => new Date())
 })
 
 /**

@@ -80,7 +80,7 @@ const VOUCHER_COLLECTION_SCHEMA = Joi.object({
       }),
     )
     .default([]),
-  createdAt: Joi.date().default(Date.now),
+  createdAt: Joi.date().default(() => new Date()),
   deletedAt: Joi.date().default(null),
   updatedAt: Joi.date().default(null),
 });

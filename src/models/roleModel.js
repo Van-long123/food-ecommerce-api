@@ -9,7 +9,7 @@ const ROLE_COLLECTION_SCHEMA = Joi.object({
   description: Joi.string().allow('').default(''),
   permissions: Joi.array().items(Joi.string()).default([]),
   deleted: Joi.boolean().default(false),
-  createdAt: Joi.date().default(Date.now),
+  createdAt: Joi.date().default(() => new Date()),
   updatedAt: Joi.date().allow(null).default(null),
   deletedAt: Joi.date().allow(null).default(null)
 })

@@ -13,8 +13,8 @@ const CART_ITEM_SCHEMA = Joi.object({
 const CART_COLLECTION_SCHEMA = Joi.object({
   userId: Joi.string().required().trim().strict(),
   items: Joi.array().items(CART_ITEM_SCHEMA).default([]),
-  createdAt: Joi.date().timestamp('javascript').default(Date.now),
-  updatedAt: Joi.date().timestamp('javascript').default(null)
+  createdAt: Joi.date().default(() => new Date()),
+  updatedAt: Joi.date().default(null)
 })
 
 const validateBeforeCreate = async (data) => {

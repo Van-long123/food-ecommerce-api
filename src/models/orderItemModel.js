@@ -12,7 +12,7 @@ const ORDER_ITEM_COLLECTION_SCHEMA = Joi.object({
   quantity: Joi.number().integer().min(1).required(),
   price: Joi.number().required(),
   totalPrice: Joi.number().required(),
-  createdAt: Joi.date().timestamp('javascript').default(Date.now)
+  createdAt: Joi.date().default(() => new Date())
 })
 
 const validateBeforeCreate = async (data) => {

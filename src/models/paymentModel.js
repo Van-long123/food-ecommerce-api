@@ -19,8 +19,8 @@ const PAYMENT_COLLECTION_SCHEMA = Joi.object({
   paymentUrl: Joi.string().allow("").optional(), // URL thanh toán (cho QR hoặc Redirect)
   rawResponse: Joi.object().optional(), // Lưu toàn bộ log từ provider trả về
 
-  createdAt: Joi.date().timestamp("javascript").default(Date.now),
-  updatedAt: Joi.date().timestamp("javascript").default(null),
+  createdAt: Joi.date().default(() => new Date()),
+  updatedAt: Joi.date().default(null),
 });
 
 const validateBeforeCreate = async (data) => {

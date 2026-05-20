@@ -10,7 +10,7 @@ const SETTINGS_GENERAL_COLLECTION_SCHEMA = Joi.object({
   email: Joi.string().allow('').default(''),
   address: Joi.string().allow('').default(''),
   copyright: Joi.string().allow('').default(''),
-  createdAt: Joi.date().default(Date.now),
+  createdAt: Joi.date().default(() => new Date()),
   updatedAt: Joi.date().allow(null).default(null)
 })
 

@@ -46,8 +46,8 @@ const REFUND_REQUEST_SCHEMA = Joi.object({
     .default(REFUND_REQUEST_STATUSES.PENDING),
   amount: Joi.number().min(0).required(),
   rejectReason: Joi.string().allow("").default(""),
-  createdAt: Joi.date().timestamp("javascript").default(Date.now),
-  updatedAt: Joi.date().timestamp("javascript").default(null),
+  createdAt: Joi.date().default(() => new Date()),
+  updatedAt: Joi.date().default(null),
 });
 
 const validateBeforeCreate = async (data) => {

@@ -32,8 +32,8 @@ const ORDER_COLLECTION_SCHEMA = Joi.object({
     )
     .default("pending"),
   deliveredAt: Joi.date().timestamp("javascript").allow(null).default(null),
-  createdAt: Joi.date().timestamp("javascript").default(Date.now),
-  updatedAt: Joi.date().timestamp("javascript").default(null),
+  createdAt: Joi.date().default(() => new Date()),
+  updatedAt: Joi.date().default(null),
   updatedBy: Joi.array()
     .items(
       Joi.object({
@@ -56,7 +56,9 @@ const createNew = async (data, options = {}) => {
     const persistData = {
       ...validData,
       userId: new ObjectId(validData.userId),
-      deliveredAt: validData.deliveredAt ? new Date(validData.deliveredAt) : null,
+      deliveredAt: validData.deliveredAt
+        ? new Date(validData.deliveredAt)
+        : null,
       createdAt: new Date(validData.createdAt),
       updatedAt: validData.updatedAt ? new Date(validData.updatedAt) : null,
     };

@@ -61,12 +61,12 @@ const CATEGORY_COLLECTION_SCHEMA = Joi.object({
       }),
     )
     .default([]),
-  createdAt: Joi.date().default(Date.now),
+  createdAt: Joi.date().default(() => new Date()),
   deletedAt: Joi.date().default(null),
   updatedAt: Joi.date().default(null),
 });
 
-const INVALID_UPDATE_FIELDS = ["_id", "createdBy", "createdAt"];
+const INVALID_UPDATE_FIELDS = ["_id", "createdBy", "createdAt", "deletedAt"];
 
 const validateBeforeCreate = async (data) => {
   return await CATEGORY_COLLECTION_SCHEMA.validateAsync(data, {
@@ -225,7 +225,10 @@ const update = async (id, updateData) => {
     Object.keys(updateData).forEach((field) => {
       if (INVALID_UPDATE_FIELDS.includes(field)) delete updateData[field];
     });
-    const persistUpdateData = { ...updateData };
+    const persistUpdateData = {
+      ...updateData,
+      updatedAt: new Date(),
+    };
     if (persistUpdateData.parent_id) {
       persistUpdateData.parent_id = new ObjectId(persistUpdateData.parent_id);
     }
@@ -251,7 +254,7 @@ const pushUpdatedBy = async (id, actorId, actorEmail) => {
         { _id: new ObjectId(id) },
         {
           $push: { updatedBy: { account_id: actorId, email: actorEmail } },
-          $set: { updatedAt: new Date() }
+          $set: { updatedAt: new Date() },
         },
       );
   } catch (error) {

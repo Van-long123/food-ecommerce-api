@@ -87,7 +87,7 @@ const USER_COLLECTION_SCHEMA = Joi.object({
       }),
     )
     .default([]),
-  createdAt: Joi.date().default(Date.now),
+  createdAt: Joi.date().default(() => new Date()),
   deletedAt: Joi.date().default(null),
   updatedAt: Joi.date().default(null),
 });
@@ -99,6 +99,7 @@ const INVALID_UPDATE_FIELDS = [
   "createdAt",
   "provider",
   "socialAccounts",
+  "deletedAt",
 ];
 
 const validateBeforeCreate = async (data) => {
@@ -149,11 +150,16 @@ const update = async (userId, updateData) => {
       }
     });
 
+    const persistUpdateData = {
+      ...updateData,
+      updatedAt: new Date(),
+    };
+
     const result = await GET_DB()
       .collection(USER_COLLECTION_NAME)
       .findOneAndUpdate(
         { _id: new ObjectId(userId) },
-        { $set: updateData },
+        { $set: persistUpdateData },
         { returnDocument: "after" },
       );
 
@@ -193,7 +199,7 @@ const upsertSocialUser = async ({
 }) => {
   try {
     const db = GET_DB().collection(USER_COLLECTION_NAME);
-    const now = Date.now();
+    const now = new Date();
 
     // Kiểm tra đã tồn tại social account này chưa
     const existBySocialId = await findOneBySocialId(provider, socialId);
