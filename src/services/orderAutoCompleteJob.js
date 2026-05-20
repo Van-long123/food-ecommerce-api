@@ -78,6 +78,7 @@ const runAutoComplete = async () => {
     console.log('[AutoComplete] Đang quét các đơn hàng "shipping" quá hạn...');
     const overdueOrders =
       await orderModel.findShippingOrdersOlderThan(AUTO_COMPLETE_DAYS);
+    console.log("🚀 ~ runAutoComplete ~ overdueOrders:", overdueOrders);
 
     if (!overdueOrders.length) {
       console.log(
@@ -108,6 +109,7 @@ const runAutoComplete = async () => {
  */
 export const startOrderAutoCompleteJob = () => {
   const schedule = "0 * * * *"; //Chạy mỗi giờ
+  // const schedule = "* * * * *"; // Chạy mỗi phút
 
   cron.schedule(schedule, runAutoComplete, {
     scheduled: true,

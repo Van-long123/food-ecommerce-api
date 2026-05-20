@@ -23,8 +23,8 @@ const CAMPAIGNS = [
     id: 'ban_chay',
     slug: 'ban-chay',
     name: 'Bán<br/>chạy',
-    match: { featured: true },
-    sort: { position: 1, createdAt: -1 }
+    match: { soldCount: { $gt: 0 } },
+    sort: { soldCount: -1, position: 1, createdAt: -1 }
   },
   {
     id: 'doc_quyen_online',

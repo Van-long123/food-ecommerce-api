@@ -11,7 +11,7 @@ const PAYMENT_COLLECTION_SCHEMA = Joi.object({
   amount: Joi.number().min(0).required(),
   currency: Joi.string().default("VND"),
   status: Joi.string()
-    .valid("pending", "completed", "cancelled", "refunded")
+    .valid("pending", "completed", "cancelled")
     .default("pending"),
 
   // PayOS specific fields
