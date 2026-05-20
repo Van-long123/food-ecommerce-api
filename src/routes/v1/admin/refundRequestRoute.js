@@ -4,7 +4,7 @@ import { refundRequestController } from "~/controllers/refundRequestController";
 
 const router = express.Router();
 
-// router.use(authMiddleware.isAuthorized, authMiddleware.isAdmin);
+router.use(authMiddleware.isAuthorized, authMiddleware.isAdmin);
 
 router.put("/:id/approve", refundRequestController.approveRefundRequest);
 router.put("/:id/reject", refundRequestController.rejectRefundRequest);

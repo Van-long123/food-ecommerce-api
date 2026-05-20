@@ -31,6 +31,7 @@ const USER_COLLECTION_SCHEMA = Joi.object({
   role: Joi.string()
     .valid(...Object.values(USER_ROLES))
     .default(USER_ROLES.CLIENT),
+  roleId: Joi.string().allow(null).default(null),
   address: Joi.string().allow("").default(""),
   gender: Joi.string().allow("").default(""),
   birthday: Joi.string().allow("").default(""),
