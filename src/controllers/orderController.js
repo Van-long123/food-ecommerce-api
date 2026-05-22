@@ -70,8 +70,9 @@ const cancelOrder = async (req, res, next) => {
   try {
     const userId = req.jwtDecoded._id
     const orderId = req.params.id
+    const payload = req.body || {}
     
-    const result = await orderService.cancelOrder(orderId, userId)
+    const result = await orderService.cancelOrder(orderId, userId, payload)
     
     res.status(StatusCodes.OK).json({
       success: true,

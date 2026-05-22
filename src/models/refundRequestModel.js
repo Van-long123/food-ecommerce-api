@@ -26,7 +26,7 @@ const REFUND_REQUEST_SCHEMA = Joi.object({
     .min(1)
     .required(),
   reason: Joi.string().required().trim(),
-  images: Joi.array().items(Joi.string()).min(1).required(),
+  images: Joi.array().items(Joi.string()).default([]),
   videos: Joi.array().items(Joi.string()).default([]),
   refundMethod: Joi.string()
     .valid("bank_transfer", "cash_on_pickup")

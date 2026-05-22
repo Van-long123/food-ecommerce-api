@@ -43,7 +43,8 @@ const ensureRefundableOrder = (order) => {
 };
 
 //  chuẩn hóa danh sách sản phẩm yêu cầu hoàn tiền và tính toán tổng số tiền cần hoàn
-const buildRefundItems = (orderItems = [], requestedItems = []) => {
+const buildRefundItems = (order, requestedItems = []) => {
+  const orderItems = order.items || [];
   if (!Array.isArray(requestedItems) || requestedItems.length === 0) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
@@ -69,6 +70,8 @@ const buildRefundItems = (orderItems = [], requestedItems = []) => {
     );
   }
 
+  let isFullRefund = true;
+
   const refundItems = normalizedItems.map((item) => {
     const orderItem = orderItemMap.get(item.productId);
     if (!orderItem) {
@@ -86,6 +89,10 @@ const buildRefundItems = (orderItems = [], requestedItems = []) => {
       );
     }
 
+    if (item.quantity < maxQty) {
+      isFullRefund = false;
+    }
+
     const price = Math.max(0, Number(orderItem.price || 0));
     return {
       productId: item.productId,
@@ -94,11 +101,32 @@ const buildRefundItems = (orderItems = [], requestedItems = []) => {
     };
   });
 
-  //  Tính tổng số tiền hoàn
-  const amount = refundItems.reduce(
+  // Kiểm tra xem có chọn đủ tất cả sản phẩm không
+  if (refundItems.length < orderItems.length) {
+    isFullRefund = false;
+  }
+
+  //  Tính tổng tiền hàng được yêu cầu trả
+  const itemsAmount = refundItems.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0,
   );
+
+  let amount = 0;
+  if (isFullRefund) {
+    // Nếu hoàn toàn bộ đơn hàng -> Hoàn đúng tổng tiền khách đã thanh toán (bao gồm ship, đã trừ voucher)
+    amount = order.totalPrice;
+  } else {
+    // Nếu hoàn một phần:
+    // + Tiền hàng trả (KHÔNG cộng tiền ship)
+
+    amount = itemsAmount;
+
+    // Đảm bảo không vượt quá tổng tiền thực tế khách đã trả
+    if (amount > order.totalPrice) {
+      amount = order.totalPrice;
+    }
+  }
 
   return { refundItems, amount };
 };
@@ -144,7 +172,7 @@ const createRefundRequest = async (userId, payload) => {
       );
     }
 
-    const { refundItems, amount } = buildRefundItems(order.items || [], items);
+    const { refundItems, amount } = buildRefundItems(order, items);
 
     const normalizedRefundMethod = ["bank_transfer", "cash_on_pickup"].includes(
       refundMethod,
@@ -191,7 +219,6 @@ const getRefundRequestByOrder = async (userId, orderId) => {
     throw error;
   }
 };
-
 
 const approveRefundRequest = async (requestId) => {
   try {
