@@ -192,57 +192,6 @@ const getRefundRequestByOrder = async (userId, orderId) => {
   }
 };
 
-const submitBankInfo = async (userId, requestId, bankInfo) => {
-  try {
-    const refundRequest = await refundRequestModel.findByIdAndUserId(
-      requestId,
-      userId,
-    );
-
-    if (!refundRequest) {
-      throw new ApiError(
-        StatusCodes.NOT_FOUND,
-        "Không tìm thấy yêu cầu hoàn tiền",
-      );
-    }
-
-    if (
-      refundRequest.status !==
-      refundRequestModel.REFUND_REQUEST_STATUSES.APPROVED_WAITING_BANK_INFO
-    ) {
-      throw new ApiError(
-        StatusCodes.BAD_REQUEST,
-        "Yêu cầu hoàn tiền chưa được duyệt hoặc đã được xử lý",
-      );
-    }
-
-    const normalizedBankInfo = {
-      bankName: String(bankInfo?.bankName || "").trim(),
-      accountNumber: String(bankInfo?.accountNumber || "").trim(),
-      accountHolder: String(bankInfo?.accountHolder || "").trim(),
-    };
-
-    if (
-      !normalizedBankInfo.bankName ||
-      !normalizedBankInfo.accountNumber ||
-      !normalizedBankInfo.accountHolder
-    ) {
-      throw new ApiError(
-        StatusCodes.BAD_REQUEST,
-        "Vui lòng nhập đầy đủ thông tin ngân hàng",
-      );
-    }
-
-    const updated = await refundRequestModel.updateById(requestId, {
-      bankInfo: normalizedBankInfo,
-      status: refundRequestModel.REFUND_REQUEST_STATUSES.PROCESSING_REFUND,
-    });
-
-    return updated.value;
-  } catch (error) {
-    throw error;
-  }
-};
 
 const approveRefundRequest = async (requestId) => {
   try {
@@ -265,9 +214,11 @@ const approveRefundRequest = async (requestId) => {
     }
 
     const isCashOnPickup = refundRequest.refundMethod === "cash_on_pickup";
+    // bank_transfer: chuyển thẳng sang processing_refund (thông tin ngân hàng đã được nhập lúc tạo yêu cầu)
+    // cash_on_pickup: chuyển sang approved_waiting_pickup (shipper đến lấy hàng & trả tiền mặt)
     const newStatus = isCashOnPickup
       ? refundRequestModel.REFUND_REQUEST_STATUSES.APPROVED_WAITING_PICKUP
-      : refundRequestModel.REFUND_REQUEST_STATUSES.APPROVED_WAITING_BANK_INFO;
+      : refundRequestModel.REFUND_REQUEST_STATUSES.PROCESSING_REFUND;
 
     const updated = await refundRequestModel.updateById(requestId, {
       status: newStatus,
@@ -434,7 +385,6 @@ const completeRefundRequest = async (requestId, payload) => {
 export const refundRequestService = {
   createRefundRequest,
   getRefundRequestByOrder,
-  submitBankInfo,
   approveRefundRequest,
   rejectRefundRequest,
   completeRefundRequest,
