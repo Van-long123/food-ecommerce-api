@@ -7,6 +7,7 @@ const REFUND_REQUEST_COLLECTION_NAME = "refund_requests";
 const REFUND_REQUEST_STATUSES = {
   PENDING: "pending",
   APPROVED_WAITING_BANK_INFO: "approved_waiting_bank_info",
+  APPROVED_WAITING_PICKUP: "approved_waiting_pickup",
   PROCESSING_REFUND: "processing_refund",
   COMPLETED: "completed",
   REJECTED: "rejected",
@@ -28,17 +29,31 @@ const REFUND_REQUEST_SCHEMA = Joi.object({
   reason: Joi.string().required().trim(),
   images: Joi.array().items(Joi.string()).min(1).required(),
   videos: Joi.array().items(Joi.string()).default([]),
-  bankInfo: Joi.object({
-    bankName: Joi.string().required(),
-    accountNumber: Joi.string().required(),
-    accountHolder: Joi.string().required(),
-  })
-    .allow(null)
-    .default(null),
+  refundMethod: Joi.string()
+    .valid("bank_transfer", "cash_on_pickup")
+    .default("bank_transfer"),
+  bankInfo: Joi.when("refundMethod", {
+    is: "cash_on_pickup",
+    then: Joi.object({
+      bankName: Joi.string(),
+      accountNumber: Joi.string(),
+      accountHolder: Joi.string(),
+    })
+      .allow(null)
+      .default(null),
+    otherwise: Joi.object({
+      bankName: Joi.string().required(),
+      accountNumber: Joi.string().required(),
+      accountHolder: Joi.string().required(),
+    })
+      .allow(null)
+      .default(null),
+  }),
   status: Joi.string()
     .valid(
       REFUND_REQUEST_STATUSES.PENDING,
       REFUND_REQUEST_STATUSES.APPROVED_WAITING_BANK_INFO,
+      REFUND_REQUEST_STATUSES.APPROVED_WAITING_PICKUP,
       REFUND_REQUEST_STATUSES.PROCESSING_REFUND,
       REFUND_REQUEST_STATUSES.COMPLETED,
       REFUND_REQUEST_STATUSES.REJECTED,

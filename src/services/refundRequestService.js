@@ -105,7 +105,14 @@ const buildRefundItems = (orderItems = [], requestedItems = []) => {
 
 const createRefundRequest = async (userId, payload) => {
   try {
-    const { orderId, items, reason, images = [], videos = [] } = payload || {};
+    const {
+      orderId,
+      items,
+      reason,
+      images = [],
+      videos = [],
+      refundMethod = "bank_transfer",
+    } = payload || {};
 
     if (!orderId) {
       throw new ApiError(StatusCodes.BAD_REQUEST, "Thiếu mã đơn hàng");
@@ -139,6 +146,12 @@ const createRefundRequest = async (userId, payload) => {
 
     const { refundItems, amount } = buildRefundItems(order.items || [], items);
 
+    const normalizedRefundMethod = ["bank_transfer", "cash_on_pickup"].includes(
+      refundMethod,
+    )
+      ? refundMethod
+      : "bank_transfer";
+
     const refundPayload = {
       orderId,
       userId,
@@ -147,6 +160,7 @@ const createRefundRequest = async (userId, payload) => {
       images,
       videos: Array.isArray(videos) ? videos : [],
       amount,
+      refundMethod: normalizedRefundMethod,
     };
 
     if (!refundPayload.reason) {
@@ -250,9 +264,13 @@ const approveRefundRequest = async (requestId) => {
       );
     }
 
+    const isCashOnPickup = refundRequest.refundMethod === "cash_on_pickup";
+    const newStatus = isCashOnPickup
+      ? refundRequestModel.REFUND_REQUEST_STATUSES.APPROVED_WAITING_PICKUP
+      : refundRequestModel.REFUND_REQUEST_STATUSES.APPROVED_WAITING_BANK_INFO;
+
     const updated = await refundRequestModel.updateById(requestId, {
-      status:
-        refundRequestModel.REFUND_REQUEST_STATUSES.APPROVED_WAITING_BANK_INFO,
+      status: newStatus,
       rejectReason: "",
     });
 
@@ -261,6 +279,7 @@ const approveRefundRequest = async (requestId) => {
       const emailHtml = getRefundApprovedTemplate({
         orderId: refundRequest.orderId?.toString() || "",
         amount: refundRequest.amount || 0,
+        refundMethod: refundRequest.refundMethod || "bank_transfer",
       });
       sendMail(
         user.email,
@@ -340,18 +359,23 @@ const completeRefundRequest = async (requestId, payload) => {
       );
     }
 
-    if (
-      refundRequest.status !==
-      refundRequestModel.REFUND_REQUEST_STATUSES.PROCESSING_REFUND
-    ) {
+    const completableStatuses = [
+      refundRequestModel.REFUND_REQUEST_STATUSES.PROCESSING_REFUND,
+      refundRequestModel.REFUND_REQUEST_STATUSES.APPROVED_WAITING_PICKUP,
+    ];
+
+    if (!completableStatuses.includes(refundRequest.status)) {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
         "Yêu cầu hoàn tiền chưa sẵn sàng để hoàn tất",
       );
     }
 
+    const isCashOnPickup = refundRequest.refundMethod === "cash_on_pickup";
     const transactionImage = String(payload?.transactionImage || "").trim();
-    if (!transactionImage) {
+
+    // Chỉ bắt buộc ảnh minh chứng cho luồng chuyển khoản ngân hàng
+    if (!isCashOnPickup && !transactionImage) {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
         "Vui lòng cung cấp hình ảnh minh chứng chuyển khoản thành công",
@@ -364,12 +388,16 @@ const completeRefundRequest = async (requestId, payload) => {
       { session },
     );
 
+    const updateData = {
+      status: refundRequestModel.REFUND_REQUEST_STATUSES.COMPLETED,
+    };
+    if (transactionImage) {
+      updateData.transactionImage = transactionImage;
+    }
+
     const updatedRefund = await refundRequestModel.updateById(
       requestId,
-      {
-        status: refundRequestModel.REFUND_REQUEST_STATUSES.COMPLETED,
-        transactionImage,
-      },
+      updateData,
       { session },
     );
 
@@ -382,6 +410,7 @@ const completeRefundRequest = async (requestId, payload) => {
           orderId: updatedRefund.orderId?.toString() || "",
           amount: updatedRefund.amount || 0,
           transactionImage: updatedRefund.transactionImage || "",
+          refundMethod: updatedRefund.refundMethod || "bank_transfer",
         });
         sendMail(
           user.email,

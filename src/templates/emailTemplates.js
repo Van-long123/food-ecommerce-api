@@ -258,7 +258,22 @@ export const getPayOSOrderTemplate = (orderData) => {
 };
 
 export const getRefundApprovedTemplate = (payload) => {
-  const { orderId, amount } = payload || {};
+  const { orderId, amount, refundMethod } = payload || {};
+  const isCashOnPickup = refundMethod === "cash_on_pickup";
+
+  const methodDescription = isCashOnPickup
+    ? "Shipper sẽ đến lấy hàng và hoàn trả tiền mặt trực tiếp cho bạn."
+    : "Vui lòng vào trang đơn hàng để bổ sung thông tin tài khoản ngân hàng nhận tiền.";
+
+  const ctaHtml = isCashOnPickup
+    ? `<a href="${WEBSITE_DOMAIN}/order/${orderId}"
+         style="display: inline-block; background-color: #f47f20; color: white; padding: 10px 22px; text-decoration: none; font-weight: bold; border-radius: 999px;">
+        Xem chi tiết đơn hàng
+      </a>`
+    : `<a href="${WEBSITE_DOMAIN}/order/${orderId}"
+         style="display: inline-block; background-color: #f47f20; color: white; padding: 10px 22px; text-decoration: none; font-weight: bold; border-radius: 999px;">
+        Cập nhật thông tin nhận tiền
+      </a>`;
 
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
@@ -270,17 +285,15 @@ export const getRefundApprovedTemplate = (payload) => {
       <div style="padding: 20px;">
         <p style="font-size: 15px; margin-top: 0;">Xin chào,</p>
         <p>Yêu cầu hoàn tiền cho đơn hàng <strong>#${orderId}</strong> đã được duyệt.</p>
-        <p>Vui lòng vào trang đơn hàng để bổ sung thông tin tài khoản ngân hàng nhận tiền.</p>
+        <p>${methodDescription}</p>
 
         <div style="background-color: #f0fdf4; padding: 14px; border-radius: 6px; margin: 18px 0; border: 1px solid #bbf7d0;">
           <p style="margin: 0;"><strong>Số tiền dự kiến:</strong> ${formatCurrency(Number(amount || 0))}</p>
+          ${isCashOnPickup ? `<p style="margin: 6px 0 0 0; color: #065f46;"><strong>Phương thức:</strong> Nhận tiền mặt khi shipper đến lấy hàng</p>` : ""}
         </div>
 
         <div style="text-align: center; margin: 26px 0;">
-          <a href="${WEBSITE_DOMAIN}/order/${orderId}"
-             style="display: inline-block; background-color: #f47f20; color: white; padding: 10px 22px; text-decoration: none; font-weight: bold; border-radius: 999px;">
-            Cập nhật thông tin nhận tiền
-          </a>
+          ${ctaHtml}
         </div>
       </div>
 
@@ -320,7 +333,8 @@ export const getRefundRejectedTemplate = (payload) => {
 };
 
 export const getRefundCompletedTemplate = (payload) => {
-  const { orderId, amount, transactionImage } = payload || {};
+  const { orderId, amount, transactionImage, refundMethod } = payload || {};
+  const isCashOnPickup = refundMethod === "cash_on_pickup";
 
   return `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
@@ -335,18 +349,19 @@ export const getRefundCompletedTemplate = (payload) => {
 
         <div style="background-color: #f0fdf4; padding: 14px; border-radius: 6px; margin: 18px 0; border: 1px solid #bbf7d0;">
           <p style="margin: 0;"><strong>Số tiền đã hoàn:</strong> ${formatCurrency(Number(amount || 0))}</p>
+          ${isCashOnPickup ? `<p style="margin: 6px 0 0 0;"><strong>Phương thức:</strong> Tiền mặt (shipper đã hoàn trả khi lấy hàng)</p>` : ""}
         </div>
 
-        ${transactionImage ? `
+        ${!isCashOnPickup && transactionImage ? `
         <div style="margin: 20px 0;">
           <p style="margin-bottom: 8px; font-weight: bold;">Ảnh chụp giao dịch chuyển khoản:</p>
           <div style="text-align: center; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px; background-color: #fafafa;">
             <img src="${transactionImage}" alt="Bill chuyển khoản" style="max-width: 100%; max-height: 400px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" />
           </div>
         </div>
-        ` : ''}
+        ` : ""}
 
-        <p>Vui lòng kiểm tra tài khoản thụ hưởng của bạn. Nếu cần hỗ trợ thêm, hãy liên hệ với bộ phận chăm sóc khách hàng.</p>
+        <p>${isCashOnPickup ? "Cảm ơn bạn đã hợp tác. Nếu cần hỗ trợ thêm, hãy liên hệ với bộ phận chăm sóc khách hàng." : "Vui lòng kiểm tra tài khoản thụ hưởng của bạn. Nếu cần hỗ trợ thêm, hãy liên hệ với bộ phận chăm sóc khách hàng."}</p>
       </div>
 
       <div style="background-color: #f5f5f5; text-align: center; padding: 18px; font-size: 12px; color: #777;">
