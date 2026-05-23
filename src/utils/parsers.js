@@ -25,3 +25,10 @@ export const toNumberOrNull = (value) => {
 
   return null
 }
+
+export const parseBool = (val) => val === true || val === 'true';
+
+export const parseNum = (val, def = 0) => {
+  const n = parseFloat(val);
+  return isNaN(n) ? def : n;
+};

@@ -1,42 +1,51 @@
-import { StatusCodes } from 'http-status-codes'
-import { productModel } from '~/models/productModel'
-import { categoryProductModel } from '~/models/categoryProductModel'
-import { categoryModel } from '~/models/categoryModel'
-import { reviewModel } from '~/models/reviewModel'
-import { orderModel } from '~/models/orderModel'
-import { userModel } from '~/models/userModel'
-import ApiError from '~/utils/ApiError'
-import { slugify } from '~/utils/formatters'
+import { StatusCodes } from "http-status-codes";
+import { productModel } from "~/models/productModel";
+import { categoryProductModel } from "~/models/categoryProductModel";
+import { categoryModel } from "~/models/categoryModel";
+import { reviewModel } from "~/models/reviewModel";
+import { orderModel } from "~/models/orderModel";
+import { userModel } from "~/models/userModel";
+import ApiError from "~/utils/ApiError";
+import { slugify } from "~/utils/formatters";
+import { parseBool, parseNum } from "~/utils/parsers";
+import { CloudinaryProvider } from "~/providers/CloudinaryProvider";
 
 // ─── Helper: generate unique slug ─────────────────────────────────────────────
 const generateUniqueSlug = async (title, providedSlug) => {
-  const baseSlug = providedSlug ? slugify(providedSlug) : slugify(title)
-  const existing = await productModel.findOneBySlugAny(baseSlug)
-  return existing ? `${baseSlug}-${Date.now()}` : baseSlug
-}
+  const baseSlug = providedSlug ? slugify(providedSlug) : slugify(title);
+  const existing = await productModel.findOneBySlugAny(baseSlug);
+  return existing ? `${baseSlug}-${Date.now()}` : baseSlug;
+};
 
 /**
  * Đồng bộ categories cho product:
  * - Upsert từng category_id vào category_products
  * - Xác định isPrimary theo primary_category_id
- * @param {string} productId
- * @param {string[]} categoryIds — danh sách category_id
- * @param {string|null} primaryCategoryId
  */
-const syncCategories = async (productId, categoryIds = [], primaryCategoryId = null) => {
+const syncCategories = async (
+  productId,
+  categoryIds = [],
+  primaryCategoryId = null,
+) => {
   // Validate: tất cả category phải tồn tại và type=product
   for (const catId of categoryIds) {
-    const cat = await categoryModel.findOneById(catId)
+    const cat = await categoryModel.findOneById(catId);
     if (!cat || cat.deleted) {
-      throw new ApiError(StatusCodes.NOT_FOUND, `Không tìm thấy category với id: ${catId}`)
+      throw new ApiError(
+        StatusCodes.NOT_FOUND,
+        `Không tìm thấy category với id: ${catId}`,
+      );
     }
     if (cat.type !== categoryModel.CATEGORY_TYPES.PRODUCT) {
       throw new ApiError(
         StatusCodes.UNPROCESSABLE_ENTITY,
-        `Category "${cat.title}" có type="${cat.type}", chỉ cho phép category type="product"!`
-      )
+        `Category "${cat.title}" có type="${cat.type}", chỉ cho phép category type="product"!`,
+      );
     }
   }
+
+  // Xóa các mapping cũ không còn trong danh sách mới
+  await categoryProductModel.syncByProductId(productId, categoryIds);
 
   // Upsert từng mapping
   const promises = categoryIds.map((catId, index) =>
@@ -44,295 +53,483 @@ const syncCategories = async (productId, categoryIds = [], primaryCategoryId = n
       product_id: productId,
       category_id: catId,
       position: index,
-      isPrimary: catId === primaryCategoryId
-    })
-  )
-  await Promise.all(promises)
-}
+      isPrimary: catId === primaryCategoryId,
+    }),
+  );
+  await Promise.all(promises);
+};
 
 // ─── ADMIN: Create ────────────────────────────────────────────────────────────
-const createNew = async (reqBody, actorId) => {
+const createNew = async (reqBody, actorId, files = null) => {
   try {
-    const slug = await generateUniqueSlug(reqBody.title, reqBody.slug)
+    // Auto-generate slug nếu không có slug hợp lệ
+    const slug = await generateUniqueSlug(reqBody.title, reqBody.slug);
 
-    const actor = await userModel.findOneById(actorId)
-    if (!actor) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản người thực hiện!')
+    const actor = await userModel.findOneById(actorId);
+    if (!actor)
+      throw new ApiError(
+        StatusCodes.NOT_FOUND,
+        "Đã xảy ra lỗi khi tìm tài khoản!",
+      );
+
+    // Auto-calculate position nếu không có hoặc bằng 0
+    let position = reqBody.position;
+    if (position === undefined || position === null || position === 0) {
+      const maxPos = await productModel.getMaxPosition();
+      position = maxPos + 1;
+    }
+
+    // Xử lý ảnh
+    // thumbnail_url: URL cũ (string), thumbnail file: file mới
+    let thumbnail = reqBody.thumbnail_url || reqBody.thumbnail || "";
+
+    // images_url: các URL ảnh cũ giữ lại
+    let existingImageUrls = reqBody.images_url || [];
+    if (!Array.isArray(existingImageUrls))
+      existingImageUrls = existingImageUrls ? [existingImageUrls] : [];
+    let images = [...existingImageUrls];
+
+    if (files && files.thumbnail && files.thumbnail.length > 0) {
+      const file = files.thumbnail[0];
+      const uploadResult = await CloudinaryProvider.streamUpload(
+        file.buffer,
+        "smartfood-products",
+        file.mimetype,
+      );
+      thumbnail = uploadResult.secure_url;
+    }
+
+    if (files && files.images && files.images.length > 0) {
+      const uploadPromises = files.images.map((file) =>
+        CloudinaryProvider.streamUpload(
+          file.buffer,
+          "smartfood-products",
+          file.mimetype,
+        ),
+      );
+      const uploadResults = await Promise.all(uploadPromises);
+      images = [...images, ...uploadResults.map((res) => res.secure_url)];
+    }
+
+    // Parse tags và category_ids (có thể là string hoặc mảng)
+    let tags = reqBody.tags || [];
+    if (!Array.isArray(tags)) tags = tags ? [tags] : [];
+
+    let category_ids = reqBody.category_ids || [];
+    if (!Array.isArray(category_ids))
+      category_ids = category_ids ? [category_ids] : [];
 
     const newProduct = {
       title: reqBody.title,
       slug,
-      description: reqBody.description || '',
-      thumbnail: reqBody.thumbnail || '',
-      images: reqBody.images || [],
-      stock: reqBody.stock ?? 0,
-      unit: reqBody.unit || 'kg',
-      price: reqBody.price,
-      discountPercentage: reqBody.discountPercentage ?? 0,
-      originalPrice: reqBody.originalPrice ?? reqBody.price,
-      status: reqBody.status || 'active',
-      featured: reqBody.featured ?? false,
-      isBestPrice: reqBody.isBestPrice ?? false,
-      isOnlineExclusive: reqBody.isOnlineExclusive ?? false,
-      tags: reqBody.tags || [],
-      ratings: reqBody.ratings || { totalRating: 0, numberOfRatings: 0 },
-      position: reqBody.position ?? 0,
+      description: reqBody.description || "",
+      thumbnail,
+      images,
+      stock: parseNum(reqBody.stock, 0),
+      unit: reqBody.unit || "kg",
+      price: parseNum(reqBody.price),
+      discountPercentage: parseNum(reqBody.discountPercentage, 0),
+      originalPrice: parseNum(reqBody.originalPrice) || parseNum(reqBody.price),
+      status: reqBody.status || "active",
+      featured: parseBool(reqBody.featured),
+      isBestPrice: parseBool(reqBody.isBestPrice),
+      isOnlineExclusive: parseBool(reqBody.isOnlineExclusive),
+      tags,
+      ratings: { totalRating: 0, numberOfRatings: 0 },
+      position,
       primary_category_id: reqBody.primary_category_id || null,
-      createdBy: { account_id: actorId, email: actor.email }
-    }
+      createdBy: { account_id: actorId, email: actor.email },
+    };
 
-    const created = await productModel.createNew(newProduct)
-    const productId = created.insertedId.toString()
+    const created = await productModel.createNew(newProduct);
+    const productId = created.insertedId.toString();
 
     // Đồng bộ categories (nếu có truyền lên)
-    const categoryIds = reqBody.category_ids || []
-    const primaryId = reqBody.primary_category_id || categoryIds[0] || null
-    if (categoryIds.length > 0) {
-      await syncCategories(productId, categoryIds, primaryId)
+    const primaryId = reqBody.primary_category_id || category_ids[0] || null;
+    if (category_ids.length > 0) {
+      await syncCategories(productId, category_ids, primaryId);
     }
 
-    const result = await productModel.getDetails(productId)
-    return result
+    const result = await productModel.getDetails(productId);
+    return result;
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 // ─── ADMIN: Get list ──────────────────────────────────────────────────────────
 const getListAdmin = async (query) => {
   try {
-    const page = parseInt(query.page) || 1
-    const limit = parseInt(query.limit) || 10
-    const sortField = query.sortField || 'position'
-    const sortOrder = query.sortOrder === 'desc' ? -1 : 1
+    const page = parseInt(query.page) || 1;
+    const limit = parseInt(query.limit) || 10;
+    const sortField = query.sortField || "position";
+    const sortOrder = query.sortOrder === "desc" ? -1 : 1;
 
-    const queryConditions = [{ deleted: false }]
-    if (query.status) queryConditions.push({ status: query.status })
-    if (query.featured !== undefined) queryConditions.push({ featured: query.featured === 'true' })
-    if (query.isBestPrice !== undefined) queryConditions.push({ isBestPrice: query.isBestPrice === 'true' })
-    if (query.isOnlineExclusive !== undefined) queryConditions.push({ isOnlineExclusive: query.isOnlineExclusive === 'true' })
+    const queryConditions = [{ deleted: false }];
+    if (query.status) queryConditions.push({ status: query.status });
+    if (query.featured !== undefined)
+      queryConditions.push({ featured: query.featured === "true" });
+    if (query.isBestPrice !== undefined)
+      queryConditions.push({ isBestPrice: query.isBestPrice === "true" });
+    if (query.isOnlineExclusive !== undefined)
+      queryConditions.push({
+        isOnlineExclusive: query.isOnlineExclusive === "true",
+      });
     if (query.keyword) {
       queryConditions.push({
         $or: [
-          { title: { $regex: new RegExp(query.keyword, 'i') } },
-          { tags: { $elemMatch: { $regex: new RegExp(query.keyword, 'i') } } }
-        ]
-      })
+          { title: { $regex: new RegExp(query.keyword, "i") } },
+          { tags: { $elemMatch: { $regex: new RegExp(query.keyword, "i") } } },
+        ],
+      });
     }
     if (query.minPrice || query.maxPrice) {
-      const priceFilter = {}
-      if (query.minPrice) priceFilter.$gte = parseFloat(query.minPrice)
-      if (query.maxPrice) priceFilter.$lte = parseFloat(query.maxPrice)
-      queryConditions.push({ price: priceFilter })
+      const priceFilter = {};
+      if (query.minPrice) priceFilter.$gte = parseFloat(query.minPrice);
+      if (query.maxPrice) priceFilter.$lte = parseFloat(query.maxPrice);
+      queryConditions.push({ price: priceFilter });
     }
-    if (query.primary_category_id) queryConditions.push({ primary_category_id: query.primary_category_id })
+    if (query.primary_category_id)
+      queryConditions.push({ primary_category_id: query.primary_category_id });
 
-    const { data, total } = await productModel.getList({ queryConditions, page, limit, sort: { [sortField]: sortOrder } })
+    const { data, total } = await productModel.getList({
+      queryConditions,
+      page,
+      limit,
+      sort: { [sortField]: sortOrder },
+    });
     return {
       data,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
-    }
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 // ─── ADMIN: Get detail by ID (kèm categories từ aggregate) ───────────────────
 const getDetailAdmin = async (id) => {
   try {
-    const product = await productModel.getDetails(id)
-    if (!product) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy sản phẩm!')
-    return product
+    const product = await productModel.getDetails(id);
+    if (!product)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy sản phẩm!");
+    return product;
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 // ─── ADMIN: Update (có thể cập nhật categories cùng lúc) ─────────────────────
-const update = async (id, reqBody, actorId) => {
+const update = async (id, reqBody, actorId, files = null) => {
   try {
-    const product = await productModel.findOneById(id)
-    if (!product || product.deleted) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy sản phẩm!')
+    const product = await productModel.findOneById(id);
+    if (!product || product.deleted)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy sản phẩm!");
 
-    const actor = await userModel.findOneById(actorId)
-    if (!actor) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản người thực hiện!')
+    const actor = await userModel.findOneById(actorId);
+    if (!actor)
+      throw new ApiError(
+        StatusCodes.NOT_FOUND,
+        "Không tìm thấy tài khoản người thực hiện!",
+      );
 
-    const updateData = { ...reqBody, updatedAt: new Date() }
-    delete updateData.createdBy
-    delete updateData.createdAt
-    delete updateData.category_ids // chỉ xử lý riêng bên dưới
+    const updateData = {
+      ...reqBody,
+      updatedAt: new Date(),
+    };
+    delete updateData.createdBy;
+    delete updateData.createdAt;
+    delete updateData.category_ids; // xử lý riêng bên dưới
+    delete updateData.thumbnail_url; // xử lý riêng bên dưới
+    delete updateData.images_url; // xử lý riêng bên dưới
+
+    if (reqBody.featured !== undefined) {
+      updateData.featured = parseBool(reqBody.featured);
+    }
+    if (reqBody.isBestPrice !== undefined) {
+      updateData.isBestPrice = parseBool(reqBody.isBestPrice);
+    }
+    if (reqBody.isOnlineExclusive !== undefined) {
+      updateData.isOnlineExclusive = parseBool(reqBody.isOnlineExclusive);
+    }
+    if (reqBody.stock !== undefined) {
+      updateData.stock = parseNum(reqBody.stock, 0);
+    }
+    if (reqBody.price !== undefined) {
+      updateData.price = parseNum(reqBody.price);
+    }
+    if (reqBody.discountPercentage !== undefined) {
+      updateData.discountPercentage = parseNum(reqBody.discountPercentage, 0);
+    }
+    if (reqBody.originalPrice !== undefined) {
+      updateData.originalPrice = parseNum(reqBody.originalPrice);
+    }
+
+    // Xử lý thumbnail
+    if (files && files.thumbnail && files.thumbnail.length > 0) {
+      const file = files.thumbnail[0];
+      const uploadResult = await CloudinaryProvider.streamUpload(
+        file.buffer,
+        "smartfood-products",
+        file.mimetype,
+      );
+      updateData.thumbnail = uploadResult.secure_url;
+    } else if (
+      reqBody.thumbnail_url !== undefined ||
+      reqBody.thumbnail !== undefined
+    ) {
+      updateData.thumbnail = reqBody.thumbnail_url || reqBody.thumbnail || "";
+    }
+
+    // Xử lý images
+    if (files && files.images && files.images.length > 0) {
+      let existingImageUrls = reqBody.images_url || [];
+      if (!Array.isArray(existingImageUrls))
+        existingImageUrls = existingImageUrls ? [existingImageUrls] : [];
+      let mergedImages = [...existingImageUrls];
+
+      const uploadPromises = files.images.map((file) =>
+        CloudinaryProvider.streamUpload(
+          file.buffer,
+          "smartfood-products",
+          file.mimetype,
+        ),
+      );
+      const uploadResults = await Promise.all(uploadPromises);
+      updateData.images = [
+        ...mergedImages,
+        ...uploadResults.map((res) => res.secure_url),
+      ];
+    } else if (
+      reqBody.images_url !== undefined ||
+      reqBody.images !== undefined
+    ) {
+      let existingImageUrls = reqBody.images_url || reqBody.images || [];
+      if (!Array.isArray(existingImageUrls))
+        existingImageUrls = existingImageUrls ? [existingImageUrls] : [];
+      updateData.images = existingImageUrls;
+    }
+
+    // Parse tags
+    if (reqBody.tags !== undefined) {
+      let tags = reqBody.tags || [];
+      if (!Array.isArray(tags)) tags = tags ? [tags] : [];
+      updateData.tags = tags;
+    }
 
     // Slug
     if (reqBody.title && !reqBody.slug) {
-      updateData.slug = await generateUniqueSlug(reqBody.title, null)
+      updateData.slug = await generateUniqueSlug(reqBody.title, null);
     } else if (reqBody.slug) {
-      const slugCandidate = slugify(reqBody.slug)
-      const existing = await productModel.findOneBySlugAny(slugCandidate)
-      updateData.slug = (existing && existing._id.toString() !== id)
-        ? `${slugCandidate}-${Date.now()}`
-        : slugCandidate
+      const slugCandidate = slugify(reqBody.slug);
+      const existing = await productModel.findOneBySlugAny(slugCandidate);
+      updateData.slug =
+        existing && existing._id.toString() !== id
+          ? `${slugCandidate}-${Date.now()}`
+          : slugCandidate;
     }
 
-    await productModel.pushUpdatedBy(id, actorId, actor.email)
-    await productModel.update(id, updateData)
+    await productModel.pushUpdatedBy(id, actorId, actor.email);
+    await productModel.update(id, updateData);
 
     // Đồng bộ categories nếu có truyền category_ids
-    if (Array.isArray(reqBody.category_ids)) {
-      const primaryId = reqBody.primary_category_id || reqBody.category_ids[0] || null
-      await syncCategories(id, reqBody.category_ids, primaryId)
+    if (reqBody.category_ids !== undefined) {
+      let category_ids = reqBody.category_ids || [];
+      if (!Array.isArray(category_ids))
+        category_ids = category_ids ? [category_ids] : [];
+      const primaryId = reqBody.primary_category_id || category_ids[0] || null;
+      await syncCategories(id, category_ids, primaryId);
     }
 
-    const result = await productModel.getDetails(id)
-    return result
+    const result = await productModel.getDetails(id);
+    return result;
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 // ─── ADMIN: Thêm product vào một category ─────────────────────────────────────
 const addCategory = async (productId, reqBody) => {
   try {
-    const product = await productModel.findOneById(productId)
-    if (!product || product.deleted) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy sản phẩm!')
+    const product = await productModel.findOneById(productId);
+    if (!product || product.deleted)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy sản phẩm!");
 
-    const category = await categoryModel.findOneById(reqBody.category_id)
-    if (!category || category.deleted) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy category!')
+    const category = await categoryModel.findOneById(reqBody.category_id);
+    if (!category || category.deleted)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy category!");
     if (category.type !== categoryModel.CATEGORY_TYPES.PRODUCT) {
       throw new ApiError(
         StatusCodes.UNPROCESSABLE_ENTITY,
-        `Category này có type="${category.type}", chỉ cho phép category type="product"!`
-      )
+        `Category này có type="${category.type}", chỉ cho phép category type="product"!`,
+      );
     }
 
     await categoryProductModel.upsert({
       product_id: productId,
       category_id: reqBody.category_id,
       position: reqBody.position ?? 0,
-      isPrimary: reqBody.isPrimary ?? false
-    })
+      isPrimary: reqBody.isPrimary ?? false,
+    });
 
     // Nếu set làm primary → cập nhật primary_category_id trên product
     if (reqBody.isPrimary) {
-      await productModel.update(productId, { primary_category_id: reqBody.category_id, updatedAt: new Date() })
+      await productModel.update(productId, {
+        primary_category_id: reqBody.category_id,
+        updatedAt: new Date(),
+      });
     }
 
-    return await productModel.getDetails(productId)
+    return await productModel.getDetails(productId);
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 // ─── ADMIN: Xóa product khỏi một category ─────────────────────────────────────
 const removeCategory = async (productId, categoryId) => {
   try {
-    const product = await productModel.findOneById(productId)
-    if (!product || product.deleted) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy sản phẩm!')
+    const product = await productModel.findOneById(productId);
+    if (!product || product.deleted)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy sản phẩm!");
 
-    await categoryProductModel.removeOne({ product_id: productId, category_id: categoryId })
+    await categoryProductModel.removeOne({
+      product_id: productId,
+      category_id: categoryId,
+    });
 
     // Nếu category bị xóa là primary → reset primary_category_id
     if (product.primary_category_id === categoryId) {
-      await productModel.update(productId, { primary_category_id: null, updatedAt: new Date() })
+      await productModel.update(productId, {
+        primary_category_id: null,
+        updatedAt: new Date(),
+      });
     }
 
-    return await productModel.getDetails(productId)
+    return await productModel.getDetails(productId);
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 // ─── ADMIN: Soft Delete ───────────────────────────────────────────────────────
 const softDelete = async (id, actorId) => {
   try {
-    const product = await productModel.findOneById(id)
-    if (!product || product.deleted) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy sản phẩm!')
+    const product = await productModel.findOneById(id);
+    if (!product || product.deleted)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy sản phẩm!");
 
-    const actor = await userModel.findOneById(actorId)
-    if (!actor) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản người thực hiện!')
+    const actor = await userModel.findOneById(actorId);
+    if (!actor)
+      throw new ApiError(
+        StatusCodes.NOT_FOUND,
+        "Không tìm thấy tài khoản người thực hiện!",
+      );
 
     // Xoá mềm tất cả category mappings
-    await categoryProductModel.deleteAllByProductId(id)
-    const result = await productModel.softDelete(id, actorId, actor.email)
-    return result
+    // await categoryProductModel.deleteAllByProductId(id);
+    const result = await productModel.softDelete(id, actorId, actor.email);
+    return result;
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 // ─── CLIENT: Get list ─────────────────────────────────────────────────────────
 const getListClient = async (query) => {
   try {
-    const page = parseInt(query.page) || 1
-    const limit = parseInt(query.limit) || 10
-    const sortField = query.sortField || 'position'
-    const sortOrder = query.sortOrder === 'desc' ? -1 : 1
+    const page = parseInt(query.page) || 1;
+    const limit = parseInt(query.limit) || 10;
+    const sortField = query.sortField || "position";
+    const sortOrder = query.sortOrder === "desc" ? -1 : 1;
 
-    const queryConditions = [{ deleted: false }, { status: 'active' }]
-    if (query.featured !== undefined) queryConditions.push({ featured: query.featured === 'true' })
-    if (query.isBestPrice !== undefined) queryConditions.push({ isBestPrice: query.isBestPrice === 'true' })
-    if (query.isOnlineExclusive !== undefined) queryConditions.push({ isOnlineExclusive: query.isOnlineExclusive === 'true' })
+    const queryConditions = [{ deleted: false }, { status: "active" }];
+    if (query.featured !== undefined)
+      queryConditions.push({ featured: query.featured === "true" });
+    if (query.isBestPrice !== undefined)
+      queryConditions.push({ isBestPrice: query.isBestPrice === "true" });
+    if (query.isOnlineExclusive !== undefined)
+      queryConditions.push({
+        isOnlineExclusive: query.isOnlineExclusive === "true",
+      });
     if (query.keyword) {
       queryConditions.push({
         $or: [
-          { title: { $regex: new RegExp(query.keyword, 'i') } },
-          { slug: { $regex: new RegExp(query.keyword, 'i') } },
-          { description: { $regex: new RegExp(query.keyword, 'i') } },
-          { tags: { $elemMatch: { $regex: new RegExp(query.keyword, 'i') } } }
-        ]
-      })
+          { title: { $regex: new RegExp(query.keyword, "i") } },
+          { slug: { $regex: new RegExp(query.keyword, "i") } },
+          { description: { $regex: new RegExp(query.keyword, "i") } },
+          { tags: { $elemMatch: { $regex: new RegExp(query.keyword, "i") } } },
+        ],
+      });
     }
     if (query.minPrice || query.maxPrice) {
-      const priceFilter = {}
-      if (query.minPrice) priceFilter.$gte = parseFloat(query.minPrice)
-      if (query.maxPrice) priceFilter.$lte = parseFloat(query.maxPrice)
-      queryConditions.push({ price: priceFilter })
+      const priceFilter = {};
+      if (query.minPrice) priceFilter.$gte = parseFloat(query.minPrice);
+      if (query.maxPrice) priceFilter.$lte = parseFloat(query.maxPrice);
+      queryConditions.push({ price: priceFilter });
     }
-    if (query.primary_category_id) queryConditions.push({ primary_category_id: query.primary_category_id })
+    if (query.primary_category_id)
+      queryConditions.push({ primary_category_id: query.primary_category_id });
 
-    const { data, total } = await productModel.getList({ queryConditions, page, limit, sort: { [sortField]: sortOrder } })
+    const { data, total } = await productModel.getList({
+      queryConditions,
+      page,
+      limit,
+      sort: { [sortField]: sortOrder },
+    });
     return {
       data,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
-    }
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 // ─── CLIENT: Get detail by slug ───────────────────────────────────────────────
 const getDetailClient = async (slug) => {
   try {
-    const product = await productModel.getDetails(slug)
-    if (!product) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy sản phẩm!')
-    return product
+    const product = await productModel.getDetails(slug);
+    if (!product)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy sản phẩm!");
+    return product;
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 const createReviewClient = async (slug, reqBody, userId) => {
   try {
-    const product = await productModel.findOneBySlugOrId(slug)
-    if (!product) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy sản phẩm!')
+    const product = await productModel.findOneBySlugOrId(slug);
+    if (!product)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy sản phẩm!");
 
-    const deliveredOrderIds = await orderModel.listDeliveredOrderIdsByProduct(userId, product._id.toString())
+    const deliveredOrderIds = await orderModel.listDeliveredOrderIdsByProduct(
+      userId,
+      product._id.toString(),
+    );
     if (!deliveredOrderIds.length) {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
-        'Bạn chỉ được đánh giá sản phẩm sau khi đã mua hàng thành công!'
-      )
+        "Bạn chỉ được đánh giá sản phẩm sau khi đã mua hàng thành công!",
+      );
     }
 
-    const existingReview = await reviewModel.findOneByUserAndProduct(product._id.toString(), userId)
+    const existingReview = await reviewModel.findOneByUserAndProduct(
+      product._id.toString(),
+      userId,
+    );
     const reviewedOrderIds = Array.isArray(existingReview?.orderIds)
       ? existingReview.orderIds.map((id) => id.toString())
-      : []
-    const targetOrderId = deliveredOrderIds.find((id) => !reviewedOrderIds.includes(id)) || null
+      : [];
+    const targetOrderId =
+      deliveredOrderIds.find((id) => !reviewedOrderIds.includes(id)) || null;
 
     if (!targetOrderId) {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
-        'Bạn đã đánh giá sản phẩm này. Hãy mua lại sản phẩm để có thể cập nhật đánh giá mới!'
-      )
+        "Bạn đã đánh giá sản phẩm này. Hãy mua lại sản phẩm để có thể cập nhật đánh giá mới!",
+      );
     }
 
     if (existingReview) {
@@ -340,63 +537,73 @@ const createReviewClient = async (slug, reqBody, userId) => {
         existingReview._id.toString(),
         {
           rating: reqBody.rating,
-          comment: reqBody.comment || '',
+          comment: reqBody.comment || "",
           images: Array.isArray(reqBody.images) ? reqBody.images : [],
-          status: reviewModel.REVIEW_STATUSES.APPROVED
+          status: reviewModel.REVIEW_STATUSES.APPROVED,
         },
-        targetOrderId
-      )
+        targetOrderId,
+      );
     } else {
       const newReview = {
         productId: product._id.toString(),
         userId,
         rating: reqBody.rating,
-        comment: reqBody.comment || '',
+        comment: reqBody.comment || "",
         images: Array.isArray(reqBody.images) ? reqBody.images : [],
         orderIds: [targetOrderId],
         status: reviewModel.REVIEW_STATUSES.APPROVED,
-        createdAt: new Date()
-      }
+        createdAt: new Date(),
+      };
 
-      await reviewModel.createNew(newReview)
+      await reviewModel.createNew(newReview);
     }
 
-    const ratings = await productModel.syncRatingsFromReviews(product._id.toString())
+    const ratings = await productModel.syncRatingsFromReviews(
+      product._id.toString(),
+    );
 
     return {
-      message: 'Đánh giá sản phẩm thành công!',
-      ratings
-    }
+      message: "Đánh giá sản phẩm thành công!",
+      ratings,
+    };
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 const getReviewEligibilityClient = async (slug, userId) => {
   try {
-    const product = await productModel.findOneBySlugOrId(slug)
-    if (!product) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy sản phẩm!')
+    const product = await productModel.findOneBySlugOrId(slug);
+    if (!product)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy sản phẩm!");
 
-    const deliveredOrderIds = await orderModel.listDeliveredOrderIdsByProduct(userId, product._id.toString())
+    const deliveredOrderIds = await orderModel.listDeliveredOrderIdsByProduct(
+      userId,
+      product._id.toString(),
+    );
     if (!deliveredOrderIds.length) {
-      return { isEligible: false, existingReview: null, targetOrderId: null }
+      return { isEligible: false, existingReview: null, targetOrderId: null };
     }
 
-    const existingReview = await reviewModel.findOneByUserAndProduct(product._id.toString(), userId)
+    const existingReview = await reviewModel.findOneByUserAndProduct(
+      product._id.toString(),
+      userId,
+    );
     const reviewedOrderIds = Array.isArray(existingReview?.orderIds)
       ? existingReview.orderIds.map((id) => id.toString())
-      : []
-    const targetOrderId = deliveredOrderIds.find((id) => !reviewedOrderIds.includes(id)) || null
+      : [];
+    const targetOrderId =
+      deliveredOrderIds.find((id) => !reviewedOrderIds.includes(id)) || null;
 
     return {
       isEligible: Boolean(targetOrderId),
       existingReview: existingReview || null,
-      targetOrderId
-    }
+      targetOrderId,
+    };
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 export const productService = {
   createNew,
@@ -409,5 +616,5 @@ export const productService = {
   getListClient,
   getDetailClient,
   createReviewClient,
-  getReviewEligibilityClient
-}
+  getReviewEligibilityClient,
+};

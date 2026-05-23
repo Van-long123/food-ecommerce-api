@@ -281,33 +281,53 @@ const getDetails = async (identifier) => {
         },
 
         // Lookup 2: ALL CATEGORIES — JOIN từ Product sang bảng trung gian category_products
-        // {
-        //   $lookup: {
-        //     from: categoryProductModel.CATEGORY_PRODUCT_COLLECTION_NAME,
-        //     localField: '_id',
-        //     foreignField: 'product_id',
-        //     pipeline: [
-        //       { $match: { deleted: false } },
-        //       { $sort: { position: 1 } },
-        //       // Nested lookup: JOIN từ bảng trung gian sang Categories
-        //       {
-        //         $lookup: {
-        //           from: 'categories',
-        //           localField: 'category_id',
-        //           foreignField: '_id',
-        //           pipeline: [
-        //             { $match: { deleted: false } },
-        //             { $project: { _id: 1, title: 1, slug: 1, type: 1, thumbnail: 1 } }
-        //           ],
-        //           as: 'categoryInfo'
-        //         }
-        //       },
-        //       { $unwind: '$categoryInfo' },
-        //       { $replaceRoot: { newRoot: '$categoryInfo' } }
-        //     ],
-        //     as: 'categories'
-        //   }
-        // },
+        {
+          $lookup: {
+            from: categoryProductModel.CATEGORY_PRODUCT_COLLECTION_NAME,
+            let: { productId: "$_id" },
+            pipeline: [
+              {
+                $match: {
+                  $expr: { $eq: ["$product_id", "$$productId"] },
+                },
+              },
+              { $sort: { position: 1 } },
+              // Nested lookup: JOIN từ bảng trung gian sang Categories
+              {
+                $lookup: {
+                  from: "categories",
+                  let: { catId: "$category_id" },
+                  pipeline: [
+                    {
+                      $match: {
+                        $expr: { $eq: ["$_id", "$$catId"] },
+                        deleted: false,
+                      },
+                    },
+                    {
+                      $project: {
+                        _id: 1,
+                        title: 1,
+                        slug: 1,
+                        type: 1,
+                        thumbnail: 1,
+                      },
+                    },
+                  ],
+                  as: "categoryInfo",
+                },
+              },
+              {
+                $unwind: {
+                  path: "$categoryInfo",
+                  preserveNullAndEmptyArrays: false,
+                },
+              },
+              { $replaceRoot: { newRoot: "$categoryInfo" } },
+            ],
+            as: "categories",
+          },
+        },
 
         // Lookup 3: REVIEWS
         {
@@ -354,100 +374,6 @@ const getDetails = async (identifier) => {
         },
       ])
       .toArray();
-    // ... (matchCondition giữ nguyên)
-
-    // const result = await GET_DB().collection(PRODUCT_COLLECTION_NAME).aggregate([
-    //   { $match: matchCondition },
-
-    //   // 1. PRIMARY CATEGORY (Giữ nguyên localField vì cùng là ObjectId)
-    //   {
-    //     $lookup: {
-    //       from: 'categories',
-    //       localField: 'primary_category_id',
-    //       foreignField: '_id',
-    //       pipeline: [
-    //         { $match: { deleted: false } },
-    //         { $project: { _id: 1, title: 1, slug: 1, type: 1, thumbnail: 1 } }
-    //       ],
-    //       as: 'primary_category'
-    //     }
-    //   },
-    //   { $addFields: { primary_category: { $arrayElemAt: ['$primary_category', 0] } } },
-
-    //   // 2. ALL CATEGORIES (Bắt buộc dùng let + $toString vì product_id là String)
-    //   {
-    //     $lookup: {
-    //       from: categoryProductModel.CATEGORY_PRODUCT_COLLECTION_NAME,
-    //       let: { productId: { $toString: '$_id' } }, // Chuyển ObjectId thành String
-    //       pipeline: [
-    //         {
-    //           $match: {
-    //             $expr: { $eq: ['$product_id', '$$productId'] },
-    //             deleted: false
-    //           }
-    //         },
-    //         { $sort: { position: 1 } },
-    //         {
-    //           $lookup: {
-    //             from: 'categories',
-    //             let: { catId: { $toObjectId: '$category_id' } },
-    //             pipeline: [
-    //               { $match: { $expr: { $eq: ['$_id', '$$catId'] }, deleted: false } },
-    //               { $project: { _id: 1, title: 1, slug: 1, type: 1, thumbnail: 1 } }
-    //             ],
-    //             as: 'categoryInfo'
-    //           }
-    //         },
-    //         { $unwind: '$categoryInfo' },
-    //         { $replaceRoot: { newRoot: '$categoryInfo' } }
-    //       ],
-    //       as: 'categories'
-    //     }
-    //   },
-
-    //   // 3. REVIEWS (Bắt buộc dùng let + $toString vì productId trong Review là String)
-    //   {
-    //     $lookup: {
-    //       from: 'reviews',
-    //       let: { productId: { $toString: '$_id' } }, // Chuyển ObjectId thành String
-    //       pipeline: [
-    //         {
-    //           $match: {
-    //             $expr: {
-    //               $and: [
-    //                 { $eq: ['$productId', '$$productId'] }, // So sánh String với String
-    //                 { $eq: ['$status', 'approved'] }
-    //               ]
-    //             }
-    //           }
-    //         },
-    //         { $sort: { createdAt: -1 } },
-    //         {
-    //           $lookup: {
-    //             from: 'users',
-    //             let: { reviewUserId: { $toObjectId: '$userId' } }, // Ép kiểu nếu userId là String
-    //             pipeline: [
-    //               { $match: { $expr: { $eq: ['$_id', '$$reviewUserId'] } } },
-    //               { $project: { _id: 1, displayName: 1, avatar: 1 } }
-    //             ],
-    //             as: 'user'
-    //           }
-    //         },
-    //         { $addFields: { user: { $arrayElemAt: ['$user', 0] } } },
-    //         {
-    //           $project: {
-    //             _id: 1, productId: 1, userId: 1, rating: 1, comment: 1,
-    //             images: 1, status: 1, createdAt: 1,
-    //             user: { _id: 1, displayName: 1, avatar: 1 }
-    //           }
-    //         }
-    //       ],
-    //       as: 'reviews'
-    //     }
-    //   },
-
-    //   // ... (Phần ratingSummary và Suggestions giữ nguyên như cũ)
-    // ]).toArray();
 
     const product = result[0] || null;
     if (product) {
@@ -545,7 +471,35 @@ const getList = async ({
         { $sort: sort },
         {
           $facet: {
-            queryData: [{ $skip: (page - 1) * limit }, { $limit: limit }],
+            queryData: [
+              { $skip: (page - 1) * limit },
+              { $limit: limit },
+              {
+                $lookup: {
+                  from: "categories",
+                  localField: "primary_category_id",
+                  foreignField: "_id",
+                  pipeline: [
+                    { $match: { deleted: false } },
+                    {
+                      $project: {
+                        _id: 1,
+                        title: 1,
+                        slug: 1,
+                        type: 1,
+                        thumbnail: 1,
+                      },
+                    },
+                  ],
+                  as: "primary_category",
+                },
+              },
+              {
+                $addFields: {
+                  primary_category: { $arrayElemAt: ["$primary_category", 0] },
+                },
+              },
+            ],
             queryTotal: [{ $count: "count" }],
           },
         },
@@ -989,6 +943,24 @@ const getListByPrimaryCategory = async ({
 //   }
 // }
 
+/**
+ * Lấy position lớn nhất hiện tại (dùng để auto-set position = max + 1 khi tạo mới)
+ */
+const getMaxPosition = async () => {
+  try {
+    const result = await GET_DB()
+      .collection(PRODUCT_COLLECTION_NAME)
+      .find({ deleted: false })
+      .sort({ position: -1 })
+      .limit(1)
+      .project({ position: 1 })
+      .toArray();
+    return result[0]?.position ?? 0;
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
 export const productModel = {
   PRODUCT_STATUSES,
   PRODUCT_UNITS,
@@ -1013,4 +985,5 @@ export const productModel = {
   // getByCategorySlug,
   syncRatingsFromReviews,
   findOneBySlugOrId,
+  getMaxPosition,
 };

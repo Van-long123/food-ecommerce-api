@@ -6,7 +6,7 @@ import { recommendationService } from '~/services/recommendationService'
 
 const createNew = async (req, res, next) => {
   try {
-    const result = await productService.createNew(req.body, req.jwtDecoded._id)
+    const result = await productService.createNew(req.body, req.jwtDecoded._id, req.files)
     res.status(StatusCodes.CREATED).json(result)
   } catch (error) { next(error) }
 }
@@ -27,7 +27,7 @@ const getDetailAdmin = async (req, res, next) => {
 
 const update = async (req, res, next) => {
   try {
-    const result = await productService.update(req.params.id, req.body, req.jwtDecoded._id)
+    const result = await productService.update(req.params.id, req.body, req.jwtDecoded._id, req.files)
     res.status(StatusCodes.OK).json(result)
   } catch (error) { next(error) }
 }
