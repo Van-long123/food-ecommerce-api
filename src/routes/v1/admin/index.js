@@ -5,6 +5,7 @@ import { adminProductRoute } from './productRoute'
 import { adminArticleRoute } from './articleRoute'
 import { adminRefundRequestRoute } from './refundRequestRoute'
 import { adminSettingsRoute } from './settingsRoute'
+import { adminRoleRoute } from './roleRoute'
 
 const router = express.Router()
 
@@ -15,5 +16,6 @@ router.use('/products', adminProductRoute)
 router.use('/articles', adminArticleRoute)
 router.use('/refund-requests', adminRefundRequestRoute)
 router.use('/settings', adminSettingsRoute)
+router.use('/roles', adminRoleRoute)
 
 export const adminRouter = router

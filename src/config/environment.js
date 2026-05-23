@@ -56,4 +56,6 @@ export const env = {
   PAYOS_CHECKSUM_KEY: process.env.PAYOS_CHECKSUM_KEY,
 
   ORDER_AUTO_COMPLETE_DAYS: process.env.ORDER_AUTO_COMPLETE_DAYS,
+
+  SYSTEM_ROLE_IDS: process.env.SYSTEM_ROLE_IDS
 }
