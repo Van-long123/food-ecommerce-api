@@ -11,6 +11,7 @@ import { clientAddressRoute } from './addressRoute'
 import { clientOrderRoute } from './orderRoute'
 import { clientCheckoutRoute } from './checkoutRoute'
 import { clientRefundRequestRoute } from './refundRequestRoute'
+import { clientSettingsRoute } from './settingsRoute'
 
 const router = express.Router()
 
@@ -27,5 +28,6 @@ router.use('/addresses', clientAddressRoute)
 router.use('/orders', clientOrderRoute)
 router.use('/checkout', clientCheckoutRoute)
 router.use('/refund-requests', clientRefundRequestRoute)
+router.use('/settings', clientSettingsRoute)
 
 export const clientRouter = router

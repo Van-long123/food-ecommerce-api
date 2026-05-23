@@ -4,6 +4,7 @@ import { adminCategoryRoute } from './categoryRoute'
 import { adminProductRoute } from './productRoute'
 import { adminArticleRoute } from './articleRoute'
 import { adminRefundRequestRoute } from './refundRequestRoute'
+import { adminSettingsRoute } from './settingsRoute'
 
 const router = express.Router()
 
@@ -13,5 +14,6 @@ router.use('/categories', adminCategoryRoute)
 router.use('/products', adminProductRoute)
 router.use('/articles', adminArticleRoute)
 router.use('/refund-requests', adminRefundRequestRoute)
+router.use('/settings', adminSettingsRoute)
 
 export const adminRouter = router
