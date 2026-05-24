@@ -109,6 +109,9 @@ const validateBeforeCreate = async (data) => {
 const createNew = async (data) => {
   try {
     const validData = await validateBeforeCreate(data);
+    if (validData.roleId) {
+      validData.roleId = new ObjectId(String(validData.roleId));
+    }
     const createdUser = await GET_DB()
       .collection(USER_COLLECTION_NAME)
       .insertOne(validData);
@@ -142,6 +145,17 @@ const findOneByEmail = async (emailValue) => {
   }
 };
 
+const findOneByResetPasswordToken = async (token) => {
+  try {
+    const result = await GET_DB().collection(USER_COLLECTION_NAME).findOne({
+      resetPasswordToken: token,
+    });
+    return result;
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
 const update = async (userId, updateData) => {
   try {
     Object.keys(updateData).forEach((fieldName) => {
@@ -155,6 +169,10 @@ const update = async (userId, updateData) => {
       updatedAt: new Date(),
     };
 
+    if (persistUpdateData.roleId) {
+      persistUpdateData.roleId = new ObjectId(String(persistUpdateData.roleId));
+    }
+
     const result = await GET_DB()
       .collection(USER_COLLECTION_NAME)
       .findOneAndUpdate(
@@ -164,6 +182,125 @@ const update = async (userId, updateData) => {
       );
 
     return result;
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const findManyByIds = async (ids = []) => {
+  try {
+    const objectIds = ids
+      .filter((id) => ObjectId.isValid(id))
+      .map((id) => new ObjectId(id));
+    if (!objectIds.length) return [];
+
+    return await GET_DB()
+      .collection(USER_COLLECTION_NAME)
+      .find({ _id: { $in: objectIds } })
+      .toArray();
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const getList = async ({
+  queryConditions = [],
+  page = 1,
+  limit = 10,
+  sort = { createdAt: -1 },
+}) => {
+  try {
+    const query = await GET_DB()
+      .collection(USER_COLLECTION_NAME)
+      .aggregate([
+        { $match: { $and: queryConditions } },
+        {
+          $project: {
+            password: 0,
+            verifyToken: 0,
+            resetPasswordToken: 0,
+            resetPasswordExpiresAt: 0,
+            socialAccounts: 0,
+          },
+        },
+        { $sort: sort },
+        {
+          $facet: {
+            queryData: [{ $skip: (page - 1) * limit }, { $limit: limit }],
+            queryTotal: [{ $count: "count" }],
+          },
+        },
+      ])
+      .toArray();
+
+    const res = query[0];
+    return {
+      data: res?.queryData || [],
+      total: res?.queryTotal?.[0]?.count || 0,
+    };
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const softDelete = async (id, deletedBy = null) => {
+  try {
+    if (!ObjectId.isValid(id)) return null;
+
+    const updateData = {
+      deleted: true,
+      deletedAt: new Date(),
+      updatedAt: new Date(),
+    };
+    if (deletedBy) updateData.deletedBy = deletedBy;
+
+    return await GET_DB()
+      .collection(USER_COLLECTION_NAME)
+      .findOneAndUpdate(
+        { _id: new ObjectId(id) },
+        { $set: updateData },
+        { returnDocument: "after" },
+      );
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const softDeleteMany = async (ids = [], deletedBy = null) => {
+  try {
+    const objectIds = ids
+      .filter((id) => ObjectId.isValid(id))
+      .map((id) => new ObjectId(id));
+    if (!objectIds.length) return { matchedCount: 0, modifiedCount: 0 };
+
+    const updateData = {
+      deleted: true,
+      deletedAt: new Date(),
+      updatedAt: new Date(),
+    };
+    if (deletedBy) updateData.deletedBy = deletedBy;
+
+    return await GET_DB()
+      .collection(USER_COLLECTION_NAME)
+      .updateMany({ _id: { $in: objectIds } }, { $set: updateData });
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const updateManyStatus = async (ids = [], isActive = false) => {
+  try {
+    const objectIds = ids
+      .filter((id) => ObjectId.isValid(id))
+      .map((id) => new ObjectId(id));
+    if (!objectIds.length) return { matchedCount: 0, modifiedCount: 0 };
+
+    return await GET_DB()
+      .collection(USER_COLLECTION_NAME)
+      .updateMany(
+        { _id: { $in: objectIds } },
+        { $set: { isActive, updatedAt: new Date() } },
+      );
   } catch (error) {
     throw new Error(error);
   }
@@ -282,7 +419,13 @@ export const userModel = {
   createNew,
   findOneById,
   findOneByEmail,
+  findOneByResetPasswordToken,
   findOneBySocialId,
   upsertSocialUser,
+  findManyByIds,
+  getList,
   update,
+  softDelete,
+  softDeleteMany,
+  updateManyStatus,
 };

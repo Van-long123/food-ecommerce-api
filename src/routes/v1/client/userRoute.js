@@ -29,6 +29,9 @@ Router.route('/forgot-password')
 Router.route('/reset-password')
   .put(userValidation.resetPassword, userController.resetPassword)
 
+Router.route('/set-password')
+  .post(userValidation.setPassword, userController.setPassword)
+
 Router.route('/update')
   .put(authMiddleware.isAuthorized, multerUploadMiddleware.upload.single('avatar'), userValidation.update, userController.update)
 

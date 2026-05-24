@@ -961,6 +961,46 @@ const getMaxPosition = async () => {
   }
 };
 
+const updateManyStatus = async (ids = [], status = PRODUCT_STATUSES.ACTIVE) => {
+  try {
+    const objectIds = ids
+      .filter((id) => ObjectId.isValid(id))
+      .map((id) => new ObjectId(id));
+    if (!objectIds.length) return { matchedCount: 0, modifiedCount: 0 };
+
+    return await GET_DB().collection(PRODUCT_COLLECTION_NAME).updateMany(
+      { _id: { $in: objectIds } },
+      { $set: { status, updatedAt: new Date() } }
+    );
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const softDeleteMany = async (ids = [], actorId, actorEmail) => {
+  try {
+    const objectIds = ids
+      .filter((id) => ObjectId.isValid(id))
+      .map((id) => new ObjectId(id));
+    if (!objectIds.length) return { matchedCount: 0, modifiedCount: 0 };
+
+    const updateData = {
+      deleted: true,
+      deletedAt: new Date(),
+    };
+    if (actorId && actorEmail) {
+      updateData.deletedBy = { account_id: actorId, email: actorEmail };
+    }
+
+    return await GET_DB().collection(PRODUCT_COLLECTION_NAME).updateMany(
+      { _id: { $in: objectIds } },
+      { $set: updateData }
+    );
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
 export const productModel = {
   PRODUCT_STATUSES,
   PRODUCT_UNITS,
@@ -985,5 +1025,6 @@ export const productModel = {
   // getByCategorySlug,
   syncRatingsFromReviews,
   findOneBySlugOrId,
-  getMaxPosition,
+  updateManyStatus,
+  softDeleteMany,
 };

@@ -96,4 +96,31 @@ const update = async (req, res, next) => {
   }
 };
 
-export const productValidation = { createNew, update };
+const adminBulkStatus = async (req, res, next) => {
+  const schema = Joi.object({
+    product_ids: Joi.array().items(Joi.string().required()).min(1).required(),
+    status: Joi.string().valid("active", "inactive").required(),
+  });
+
+  try {
+    await schema.validateAsync(req.body, { abortEarly: false });
+    next();
+  } catch (error) {
+    next(new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, error.message));
+  }
+};
+
+const adminBulkDelete = async (req, res, next) => {
+  const schema = Joi.object({
+    product_ids: Joi.array().items(Joi.string().required()).min(1).required(),
+  });
+
+  try {
+    await schema.validateAsync(req.body, { abortEarly: false });
+    next();
+  } catch (error) {
+    next(new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, error.message));
+  }
+};
+
+export const productValidation = { createNew, update, adminBulkStatus, adminBulkDelete };

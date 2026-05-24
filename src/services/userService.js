@@ -2,6 +2,7 @@ import { StatusCodes } from 'http-status-codes'
 import bcryptjs from 'bcryptjs'
 import { v4 as uuidv4 } from 'uuid'
 import { userModel } from '~/models/userModel'
+import { roleModel } from '~/models/roleModel'
 import ApiError from '~/utils/ApiError'
 import { pickUser } from '~/utils/formatters'
 import { jwtProvider } from '~/providers/jwtProvider'
@@ -11,6 +12,158 @@ import { sendMail } from '~/utils/sendMail'
 import { CloudinaryProvider } from '~/providers/CloudinaryProvider'
 
 const RESET_PASSWORD_TOKEN_LIFE = 1000 * 60 * 15
+const ADMIN_RESET_PASSWORD_TOKEN_LIFE = 1000 * 60 * 60 * 24
+
+/**
+ * Lấy danh sách ID của các vai trò hệ thống (System Roles) từ biến môi trường.
+ * Các ID này đại diện cho những quyền quản trị tối cao không thể xóa sửa.
+ */
+const getSystemRoleIds = () => {
+  const raw = String(env.SYSTEM_ROLE_IDS || '')
+  return raw
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean)
+}
+
+/**
+ * Phân giải và xác định loại tài khoản (role string: 'admin' hoặc 'client') dựa trên dữ liệu đầu vào.
+ * Ưu tiên lấy trực tiếp trường 'role' nếu có. Nếu không, dựa vào 'roleId' để kiểm tra xem
+ * vai trò đó có thuộc System Roles hoặc được đánh dấu 'isSystem' trong DB hay không.
+ */
+const resolveUserRole = async (payload = {}) => {
+  if (payload.role && ['admin', 'client'].includes(payload.role)) {
+    return payload.role
+  }
+
+  if (payload.roleId) {
+    const systemRoleIds = getSystemRoleIds()
+    if (systemRoleIds.includes(String(payload.roleId))) {
+      return userModel.USER_ROLES.ADMIN
+    }
+
+    const role = await roleModel.findOneById(payload.roleId)
+    if (role?.isSystem) return userModel.USER_ROLES.ADMIN
+  }
+
+  return userModel.USER_ROLES.CLIENT
+}
+
+/**
+ * Loại bỏ các trường dữ liệu nhạy cảm (mật khẩu, token) ra khỏi object user
+ * trước khi trả dữ liệu về cho Frontend, đảm bảo bảo mật thông tin người dùng.
+ */
+const sanitizeUser = (user) => {
+  if (!user) return null
+  const cloned = { ...user }
+  delete cloned.password
+  delete cloned.verifyToken
+  delete cloned.resetPasswordToken
+  delete cloned.resetPasswordExpiresAt
+  delete cloned.socialAccounts
+  return cloned
+}
+
+const buildWelcomeEmail = (token) => {
+  const setPasswordLink = `${WEBSITE_DOMAIN}/auth/set-password?token=${encodeURIComponent(token)}`
+  const subject = 'SmartFood: Kich hoat tai khoan va dat mat khau'
+  const html = `
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kich hoat tai khoan — SmartFood</title>
+</head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f3f4f6;padding:40px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;">
+          <tr>
+            <td align="center" style="padding-bottom:24px;">
+              <table cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="background:#F97316;border-radius:12px;padding:10px 20px;display:inline-block;">
+                    <span style="color:#ffffff;font-size:20px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">🌿 SMARTFOOD</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 32px rgba(0,0,0,0.08);border:1px solid #E5E7EB;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="background:linear-gradient(135deg,#16A34A 0%,#F97316 80%);padding:48px 32px 40px;text-align:center;">
+                    <div style="display:inline-block;background:rgba(255,255,255,0.18);border:2px solid rgba(255,255,255,0.35);border-radius:50%;width:80px;height:80px;line-height:80px;text-align:center;margin-bottom:20px;font-size:36px;">✨</div>
+                    <h1 style="margin:0 0 8px;color:#ffffff;font-size:28px;font-weight:800;letter-spacing:-0.5px;line-height:1.2;">Chao mung ban!</h1>
+                    <p style="margin:0;color:rgba(255,255,255,0.85);font-size:15px;">Tai khoan SmartFood da san sang</p>
+                  </td>
+                </tr>
+              </table>
+
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:40px 40px 32px;">
+                    <p style="margin:0 0 8px;color:#111827;font-size:22px;font-weight:700;line-height:1.3;">Xin chao! 👋</p>
+                    <p style="margin:0 0 28px;color:#4B5563;font-size:15px;line-height:1.7;">
+                      Quan tri vien vua tao tai khoan cho ban tai <strong style="color:#F97316;">SmartFood</strong>.<br/>
+                      Vui long nhan nut ben duoi de kich hoat tai khoan va dat mat khau.
+                    </p>
+
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" style="padding:4px 0 36px;">
+                          <a href="${setPasswordLink}" style="display:inline-block;background:linear-gradient(135deg,#F97316,#EA580C);color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;letter-spacing:0.3px;padding:16px 48px;border-radius:100px;box-shadow:0 8px 24px rgba(249,115,22,0.35);">
+                            Dat mat khau
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="border-top:1px solid #F3F4F6;padding-bottom:24px;"></td>
+                      </tr>
+                    </table>
+
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td style="background:#F9FAFB;border:1px dashed #E5E7EB;border-radius:10px;padding:16px;">
+                          <p style="margin:0 0 6px;color:#6B7280;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Neu nut khong hoat dong, sao chep link:</p>
+                          <p style="margin:0;color:#F97316;font-size:12px;word-break:break-all;line-height:1.5;">${setPasswordLink}</p>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <p style="margin:20px 0 0;color:#9CA3AF;font-size:13px;line-height:1.6;text-align:center;">
+                      Link kich hoat co hieu luc trong 24 gio.<br/>
+                      Neu ban khong yeu cau, vui long bo qua email nay.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="background:#1F2937;border-radius:0 0 20px 20px;padding:32px 40px;text-align:center;">
+              <p style="margin:0 0 12px;color:#ffffff;font-size:16px;font-weight:800;letter-spacing:0.5px;">🌿 SMARTFOOD</p>
+              <p style="margin:0;color:#6B7280;font-size:11px;line-height:1.6;">Email nay duoc gui tu dong tu he thong SmartFood.</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`
+
+  return { subject, html }
+}
 
 const createNew = async (reqBody) => {
   try {
@@ -698,6 +851,35 @@ const resetPassword = async (reqBody) => {
   }
 }
 
+const setPassword = async (reqBody) => {
+  try {
+    const existUser = await userModel.findOneByResetPasswordToken(reqBody.token)
+    if (!existUser) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản!')
+    if (existUser.deleted) throw new ApiError(StatusCodes.FORBIDDEN, 'Tài khoản đã bị xóa!')
+
+    if (!existUser.resetPasswordToken || existUser.resetPasswordToken !== reqBody.token) {
+      throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Mã kích hoạt không hợp lệ!')
+    }
+
+    if (!existUser.resetPasswordExpiresAt || Number(existUser.resetPasswordExpiresAt) < Date.now()) {
+      throw new ApiError(StatusCodes.GONE, 'Mã kích hoạt đã hết hạn!')
+    }
+
+    await userModel.update(existUser._id, {
+      password: bcryptjs.hashSync(reqBody.newPassword, 8),
+      isActive: true,
+      verifyToken: null,
+      resetPasswordToken: null,
+      resetPasswordExpiresAt: null,
+      updatedAt: Date.now()
+    })
+
+    return { set: true }
+  } catch (error) {
+    throw error
+  }
+}
+
 
 const update = async (userId, reqBody, file) => {
   try {
@@ -808,6 +990,239 @@ const verifyOAuth = async (reqBody) => {
   }
 }
 
+// ─── ADMIN ────────────────────────────────────────────────────────────────
+
+const getListAdmin = async (query) => {
+  try {
+    const page = parseInt(query.page) || 1
+    const limit = parseInt(query.limit) || 10
+    const sortField = query.sortField || 'createdAt'
+    const sortOrder = query.sortOrder === 'asc' ? 1 : -1
+
+    const allowedSortFields = [
+      'displayName',
+      'email',
+      'phone',
+      'role',
+      'isActive',
+      'createdAt',
+      'updatedAt'
+    ]
+    const safeSortField = allowedSortFields.includes(sortField) ? sortField : 'createdAt'
+
+    const queryConditions = [{ deleted: false }]
+
+    if (query.keyword) {
+      const regex = new RegExp(query.keyword, 'i')
+      queryConditions.push({
+        $or: [
+          { displayName: { $regex: regex } },
+          { email: { $regex: regex } },
+          { phone: { $regex: regex } }
+        ]
+      })
+    }
+
+    if (query.role) {
+      queryConditions.push({ role: query.role })
+    }
+
+    if (query.status) {
+      const isActive = query.status === 'active'
+      queryConditions.push({ isActive })
+    }
+
+    const { data, total } = await userModel.getList({
+      queryConditions,
+      page,
+      limit,
+      sort: { [safeSortField]: sortOrder }
+    })
+
+    return {
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    }
+  } catch (error) {
+    throw error
+  }
+}
+
+const getDetailAdmin = async (id) => {
+  try {
+    const user = await userModel.findOneById(id)
+    if (!user || user.deleted) {
+      throw new ApiError(StatusCodes.NOT_FOUND, 'Khong tim thay nguoi dung!')
+    }
+    return sanitizeUser(user)
+  } catch (error) {
+    throw error
+  }
+}
+
+const createAdmin = async (reqBody, actorId, file) => {
+  try {
+    const existUser = await userModel.findOneByEmail(reqBody.email)
+    if (existUser) {
+      throw new ApiError(StatusCodes.CONFLICT, 'Email da ton tai!')
+    }
+
+    const actor = await userModel.findOneById(actorId)
+    if (!actor) {
+      throw new ApiError(StatusCodes.NOT_FOUND, 'Khong tim thay tai khoan thuc hien!')
+    }
+
+    const role = await resolveUserRole(reqBody)
+    const resetPasswordToken = uuidv4()
+    const resetPasswordExpiresAt = Date.now() + ADMIN_RESET_PASSWORD_TOKEN_LIFE
+
+    let avatar = reqBody.avatar || null
+    if (file) {
+      const uploadResult = await CloudinaryProvider.streamUpload(file.buffer, 'smartfood-users', file.mimetype)
+      avatar = uploadResult.secure_url
+    }
+
+    const nameFromEmail = reqBody.email.split('@')[0]
+    const newUser = {
+      email: reqBody.email,
+      password: null,
+      username: nameFromEmail,
+      displayName: reqBody.displayName || nameFromEmail,
+      phone: reqBody.phone || '',
+      avatar,
+      role,
+      roleId: reqBody.roleId || null,
+      address: reqBody.address || '',
+      gender: reqBody.gender || '',
+      birthday: reqBody.birthday || '',
+      isActive: false,
+      verifyToken: null,
+      resetPasswordToken,
+      resetPasswordExpiresAt,
+      provider: userModel.AUTH_PROVIDERS.LOCAL,
+      socialAccounts: [],
+      createdBy: { account_id: actorId, email: actor.email },
+      createdAt: new Date(),
+      // updatedAt: null,
+      deleted: false
+    }
+
+    const created = await userModel.createNew(newUser)
+    const createdUser = await userModel.findOneById(created.insertedId)
+
+    const { subject, html } = buildWelcomeEmail(resetPasswordToken)
+    await sendMail(reqBody.email, subject, html)
+
+    return sanitizeUser(createdUser)
+  } catch (error) {
+    throw error
+  }
+}
+
+const updateAdmin = async (id, reqBody, actorId, file) => {
+  try {
+    const user = await userModel.findOneById(id)
+    if (!user || user.deleted) {
+      throw new ApiError(StatusCodes.NOT_FOUND, 'Khong tim thay nguoi dung!')
+    }
+
+    const updateData = {
+      displayName: reqBody.displayName,
+      phone: reqBody.phone,
+      roleId: reqBody.roleId,
+      address: reqBody.address,
+      gender: reqBody.gender,
+      birthday: reqBody.birthday
+    }
+
+    if (reqBody.isActive !== undefined) {
+      updateData.isActive = reqBody.isActive === true || reqBody.isActive === 'true'
+    }
+
+    if (reqBody.role) {
+      updateData.role = reqBody.role
+    } else if (reqBody.roleId !== undefined) {
+      updateData.role = await resolveUserRole(reqBody)
+    }
+
+    if (file) {
+      const uploadResult = await CloudinaryProvider.streamUpload(file.buffer, 'smartfood-users', file.mimetype)
+      updateData.avatar = uploadResult.secure_url
+    } else if (reqBody.avatar !== undefined) {
+      updateData.avatar = reqBody.avatar
+    }
+
+    const updated = await userModel.update(id, updateData)
+    return sanitizeUser(updated)
+  } catch (error) {
+    throw error
+  }
+}
+
+const softDeleteAdmin = async (id, actorId) => {
+  try {
+    const user = await userModel.findOneById(id)
+    if (!user || user.deleted) {
+      throw new ApiError(StatusCodes.NOT_FOUND, 'Khong tim thay nguoi dung!')
+    }
+
+    const actor = await userModel.findOneById(actorId)
+    if (!actor) {
+      throw new ApiError(StatusCodes.NOT_FOUND, 'Khong tim thay tai khoan thuc hien!')
+    }
+
+    const result = await userModel.softDelete(id, {
+      account_id: actorId,
+      email: actor.email
+    })
+
+    return sanitizeUser(result)
+  } catch (error) {
+    throw error
+  }
+}
+
+const bulkUpdateStatusAdmin = async ({ user_ids = [], isActive }) => {
+  try {
+    if (!Array.isArray(user_ids) || user_ids.length === 0) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'Danh sach nguoi dung khong hop le!')
+    }
+
+    const status = isActive === true || isActive === 'true'
+    const result = await userModel.updateManyStatus(user_ids, status)
+    return { updatedCount: result?.modifiedCount || 0 }
+  } catch (error) {
+    throw error
+  }
+}
+
+const bulkDeleteAdmin = async ({ user_ids = [] }, actorId) => {
+  try {
+    if (!Array.isArray(user_ids) || user_ids.length === 0) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'Danh sach nguoi dung khong hop le!')
+    }
+
+    const actor = await userModel.findOneById(actorId)
+    if (!actor) {
+      throw new ApiError(StatusCodes.NOT_FOUND, 'Khong tim thay tai khoan thuc hien!')
+    }
+
+    const result = await userModel.softDeleteMany(user_ids, {
+      account_id: actorId,
+      email: actor.email
+    })
+
+    return { deletedCount: result?.modifiedCount || 0 }
+  } catch (error) {
+    throw error
+  }
+}
+
 export const userService = {
   createNew,
   verifyAccount,
@@ -816,6 +1231,14 @@ export const userService = {
   update,
   forgotPassword,
   resetPassword,
+  setPassword,
   socialAuthCallback,
-  verifyOAuth
+  verifyOAuth,
+  getListAdmin,
+  getDetailAdmin,
+  createAdmin,
+  updateAdmin,
+  softDeleteAdmin,
+  bulkUpdateStatusAdmin,
+  bulkDeleteAdmin
 }

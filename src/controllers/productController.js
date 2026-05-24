@@ -39,6 +39,20 @@ const softDelete = async (req, res, next) => {
   } catch (error) { next(error) }
 }
 
+const bulkUpdateStatusAdmin = async (req, res, next) => {
+  try {
+    const result = await productService.bulkUpdateStatusAdmin(req.body)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) { next(error) }
+}
+
+const bulkDeleteAdmin = async (req, res, next) => {
+  try {
+    const result = await productService.bulkDeleteAdmin(req.body, req.jwtDecoded._id)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) { next(error) }
+}
+
 // POST   /admin/products/:id/categories        — gán vào category
 const addCategory = async (req, res, next) => {
   try {
@@ -101,6 +115,8 @@ export const productController = {
   getDetailAdmin,
   update,
   softDelete,
+  bulkUpdateStatusAdmin,
+  bulkDeleteAdmin,
   addCategory,
   removeCategory,
   getListClient,

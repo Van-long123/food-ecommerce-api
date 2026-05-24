@@ -98,6 +98,15 @@ const resetPassword = async (req, res, next) => {
   }
 }
 
+const setPassword = async (req, res, next) => {
+  try {
+    const result = await userService.setPassword(req.body)
+    return res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
 // Social Auth Callback — được gọi sau khi Passport xác thực xong
 // req.user chứa socialProfile: { socialId, provider, email, displayName, avatar }
 const socialAuthCallback = async (req, res, next) => {
@@ -141,6 +150,70 @@ const verifyOAuth = async (req, res, next) => {
   }
 }
 
+// ─── ADMIN ────────────────────────────────────────────────────────────────
+const getListAdmin = async (req, res, next) => {
+  try {
+    const result = await userService.getListAdmin(req.query)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const getDetailAdmin = async (req, res, next) => {
+  try {
+    const result = await userService.getDetailAdmin(req.params.id)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const createAdmin = async (req, res, next) => {
+  try {
+    const result = await userService.createAdmin(req.body, req.jwtDecoded._id, req.file)
+    res.status(StatusCodes.CREATED).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const updateAdmin = async (req, res, next) => {
+  try {
+    const result = await userService.updateAdmin(req.params.id, req.body, req.jwtDecoded._id, req.file)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const softDeleteAdmin = async (req, res, next) => {
+  try {
+    const result = await userService.softDeleteAdmin(req.params.id, req.jwtDecoded._id)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const bulkUpdateStatusAdmin = async (req, res, next) => {
+  try {
+    const result = await userService.bulkUpdateStatusAdmin(req.body)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const bulkDeleteAdmin = async (req, res, next) => {
+  try {
+    const result = await userService.bulkDeleteAdmin(req.body, req.jwtDecoded._id)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
 export const userController = {
   createNew,
   verifyAccount,
@@ -150,6 +223,14 @@ export const userController = {
   update,
   forgotPassword,
   resetPassword,
+  setPassword,
   socialAuthCallback,
-  verifyOAuth
+  verifyOAuth,
+  getListAdmin,
+  getDetailAdmin,
+  createAdmin,
+  updateAdmin,
+  softDeleteAdmin,
+  bulkUpdateStatusAdmin,
+  bulkDeleteAdmin
 }

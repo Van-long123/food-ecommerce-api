@@ -23,6 +23,12 @@ Router.route("/")
     productController.createNew,
   );
 
+Router.route('/bulk-status')
+  .put(productValidation.adminBulkStatus, productController.bulkUpdateStatusAdmin)
+
+Router.route('/bulk')
+  .delete(productValidation.adminBulkDelete, productController.bulkDeleteAdmin)
+
 // GET    /v1/admin/products/:id → Chi tiết (kèm primary_category + categories)
 // PUT    /v1/admin/products/:id → Cập nhật (có thể kèm category_ids[])
 // DELETE /v1/admin/products/:id → Xoá mềm (tự xoá category_products)

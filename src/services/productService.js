@@ -435,6 +435,42 @@ const softDelete = async (id, actorId) => {
   }
 };
 
+const bulkUpdateStatusAdmin = async ({ product_ids = [], status }) => {
+  try {
+    if (!Array.isArray(product_ids) || product_ids.length === 0) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "Danh sách sản phẩm không hợp lệ!");
+    }
+
+    const result = await productModel.updateManyStatus(product_ids, status);
+    return { updatedCount: result?.modifiedCount || 0 };
+  } catch (error) {
+    throw error;
+  }
+};
+
+const bulkDeleteAdmin = async ({ product_ids = [] }, actorId) => {
+  try {
+    if (!Array.isArray(product_ids) || product_ids.length === 0) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "Danh sách sản phẩm không hợp lệ!");
+    }
+
+    const actor = await userModel.findOneById(actorId);
+    if (!actor) {
+      throw new ApiError(
+        StatusCodes.NOT_FOUND,
+        "Không tìm thấy tài khoản người thực hiện!",
+      );
+    }
+
+    const result = await productModel.softDeleteMany(product_ids, actorId, actor.email);
+
+    return { deletedCount: result?.modifiedCount || 0 };
+  } catch (error) {
+    throw error;
+  }
+};
+
+
 // ─── CLIENT: Get list ─────────────────────────────────────────────────────────
 const getListClient = async (query) => {
   try {
@@ -613,6 +649,8 @@ export const productService = {
   addCategory,
   removeCategory,
   softDelete,
+  bulkUpdateStatusAdmin,
+  bulkDeleteAdmin,
   getListClient,
   getDetailClient,
   createReviewClient,
