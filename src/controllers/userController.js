@@ -80,6 +80,26 @@ const update = async (req, res, next) => {
   }
 }
 
+const updateSelfProfile = async (req, res, next) => {
+  try {
+    const userId = req.jwtDecoded._id
+    const updatedUser = await userService.updateSelfProfile(userId, req.body, req.file)
+    return res.status(StatusCodes.OK).json(updatedUser)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const changePassword = async (req, res, next) => {
+  try {
+    const userId = req.jwtDecoded._id
+    const result = await userService.changePassword(userId, req.body)
+    return res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
 const forgotPassword = async (req, res, next) => {
   try {
     const result = await userService.forgotPassword(req.body)
@@ -221,6 +241,8 @@ export const userController = {
   logout,
   refreshToken,
   update,
+  updateSelfProfile,
+  changePassword,
   forgotPassword,
   resetPassword,
   setPassword,

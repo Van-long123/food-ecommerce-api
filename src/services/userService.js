@@ -64,6 +64,46 @@ const sanitizeUser = (user) => {
   return cloned
 }
 
+const SELF_PROFILE_FORBIDDEN_FIELDS = [
+  '_id',
+  'email',
+  'password',
+  'role',
+  'roleId',
+  'isActive',
+  'provider',
+  'socialAccounts',
+  'verifyToken',
+  'resetPasswordToken',
+  'resetPasswordExpiresAt',
+  'deleted',
+  'deletedAt',
+  'createdAt',
+  'createdBy',
+  'deletedBy',
+  'updatedBy'
+]
+
+const stripForbiddenSelfProfileFields = (payload = {}) => {
+  const cloned = { ...payload }
+  SELF_PROFILE_FORBIDDEN_FIELDS.forEach((field) => {
+    delete cloned[field]
+  })
+  return cloned
+}
+
+const normalizeSelfProfilePayload = (payload = {}) => {
+  const updateData = stripForbiddenSelfProfileFields(payload)
+
+  if (typeof updateData.displayName === 'string') updateData.displayName = updateData.displayName.trim()
+  if (typeof updateData.phone === 'string') updateData.phone = updateData.phone.trim()
+  if (typeof updateData.address === 'string') updateData.address = updateData.address.trim()
+  if (typeof updateData.gender === 'string') updateData.gender = updateData.gender.trim()
+  if (typeof updateData.birthday === 'string') updateData.birthday = updateData.birthday.trim()
+
+  return updateData
+}
+
 const buildWelcomeEmail = (token) => {
   const setPasswordLink = `${WEBSITE_DOMAIN}/auth/set-password?token=${encodeURIComponent(token)}`
   const subject = 'SmartFood: Kich hoat tai khoan va dat mat khau'
@@ -1065,6 +1105,64 @@ const getDetailAdmin = async (id) => {
   }
 }
 
+const updateSelfProfile = async (userId, reqBody, file) => {
+  try {
+    const existUser = await userModel.findOneById(userId)
+    if (!existUser) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản!')
+    if (!existUser.isActive) throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Tài khoản chưa được kích hoạt!')
+
+    const updateData = normalizeSelfProfilePayload(reqBody)
+
+    if (file) {
+      const uploadResult = await CloudinaryProvider.streamUpload(file.buffer, 'smartfood-users', file.mimetype)
+      updateData.avatar = uploadResult.secure_url
+    } else if (updateData.avatar === undefined) {
+      delete updateData.avatar
+    }
+
+    const updatedUser = await userModel.update(existUser._id, {
+      ...updateData,
+      updatedAt: Date.now()
+    })
+
+    return pickUser(updatedUser)
+  } catch (error) {
+    throw error
+  }
+}
+
+const changePassword = async (userId, reqBody) => {
+  try {
+    const existUser = await userModel.findOneById(userId)
+    if (!existUser) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản!')
+    if (!existUser.isActive) throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Tài khoản chưa được kích hoạt!')
+
+    if (!existUser.password) {
+      throw new ApiError(
+        StatusCodes.NOT_ACCEPTABLE,
+        'Tài khoản của bạn chưa thiết lập mật khẩu. Vui lòng sử dụng chức năng "Quên mật khẩu" để tạo mật khẩu lần đầu.'
+      )
+    }
+
+    const isOldPasswordValid = await bcryptjs.compare(reqBody.oldPassword, existUser.password)
+    if (!isOldPasswordValid) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, 'Mật khẩu hiện tại không đúng!')
+    }
+
+    const hashedPassword = await bcryptjs.hash(reqBody.newPassword, 8)
+    await userModel.update(existUser._id, {
+      password: hashedPassword,
+      resetPasswordToken: null,
+      resetPasswordExpiresAt: null,
+      updatedAt: Date.now()
+    })
+
+    return { message: 'Đổi mật khẩu thành công!' }
+  } catch (error) {
+    throw error
+  }
+}
+
 const createAdmin = async (reqBody, actorId, file) => {
   try {
     const existUser = await userModel.findOneByEmail(reqBody.email)
@@ -1234,6 +1332,8 @@ export const userService = {
   setPassword,
   socialAuthCallback,
   verifyOAuth,
+  updateSelfProfile,
+  changePassword,
   getListAdmin,
   getDetailAdmin,
   createAdmin,

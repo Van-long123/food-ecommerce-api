@@ -15,6 +15,10 @@ const isAuthorized = async (req, res, next) => {
   try {
     const accessTokenDecoded = await jwtProvider.verifyToken(clientAccessToken, env.ACCESS_TOKEN_PRIVATE_KEY)
     req.jwtDecoded = accessTokenDecoded
+    req.user = {
+      userId: accessTokenDecoded._id,
+      email: accessTokenDecoded.email
+    }
     next()
   } catch (error) {
     if (error?.message?.includes('jwt expired')) {
@@ -35,6 +39,10 @@ const isAuthorizedOptional = async (req, res, next) => {
   try {
     const accessTokenDecoded = await jwtProvider.verifyToken(clientAccessToken, env.ACCESS_TOKEN_PRIVATE_KEY)
     req.jwtDecoded = accessTokenDecoded
+    req.user = {
+      userId: accessTokenDecoded._id,
+      email: accessTokenDecoded.email
+    }
     next()
   } catch (error) {
     next() // Ignore auth error if optional

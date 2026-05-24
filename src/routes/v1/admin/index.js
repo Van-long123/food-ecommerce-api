@@ -7,6 +7,8 @@ import { adminRefundRequestRoute } from './refundRequestRoute'
 import { adminSettingsRoute } from './settingsRoute'
 import { adminRoleRoute } from './roleRoute'
 import { adminUserRoute } from './userRoute'
+import { adminProfileRoute } from './profileRoute'
+
 
 const router = express.Router()
 
@@ -19,5 +21,6 @@ router.use('/refund-requests', adminRefundRequestRoute)
 router.use('/settings', adminSettingsRoute)
 router.use('/roles', adminRoleRoute)
 router.use('/users', adminUserRoute)
+router.use('/profile', adminProfileRoute)
 
 export const adminRouter = router

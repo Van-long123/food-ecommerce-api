@@ -68,6 +68,38 @@ const update = async (req, res, next) => {
   }
 }
 
+const selfUpdateProfile = async (req, res, next) => {
+  const correctCondition = Joi.object({
+    displayName: Joi.string().optional().trim().strict(),
+    phone: Joi.string().optional().trim().strict(),
+    avatar: Joi.string().optional().allow(''),
+    address: Joi.string().optional().allow(''),
+    gender: Joi.string().optional().allow(''),
+    birthday: Joi.string().optional().allow('')
+  })
+
+  try {
+    await correctCondition.validateAsync(req.body, { abortEarly: false, allowUnknown: true })
+    next()
+  } catch (error) {
+    next(new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, error.message))
+  }
+}
+
+const changePassword = async (req, res, next) => {
+  const correctCondition = Joi.object({
+    oldPassword: Joi.string().required(),
+    newPassword: Joi.string().required().pattern(PASSWORD_RULE).message(PASSWORD_RULE_MESSAGE)
+  })
+
+  try {
+    await correctCondition.validateAsync(req.body, { abortEarly: false, allowUnknown: true })
+    next()
+  } catch (error) {
+    next(new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, error.message))
+  }
+}
+
 const forgotPassword = async (req, res, next) => {
   const correctCondition = Joi.object({
     email: Joi.string().required().pattern(EMAIL_RULE).message(EMAIL_RULE_MESSAGE)
@@ -186,6 +218,8 @@ export const userValidation = {
   verifyAccount,
   login,
   update,
+  selfUpdateProfile,
+  changePassword,
   forgotPassword,
   resetPassword,
   setPassword,
