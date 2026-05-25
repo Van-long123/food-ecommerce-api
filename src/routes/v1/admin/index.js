@@ -8,6 +8,7 @@ import { adminSettingsRoute } from './settingsRoute'
 import { adminRoleRoute } from './roleRoute'
 import { adminUserRoute } from './userRoute'
 import { adminProfileRoute } from './profileRoute'
+import { adminReviewRoute } from './reviewRoute'
 
 
 const router = express.Router()
@@ -22,5 +23,6 @@ router.use('/settings', adminSettingsRoute)
 router.use('/roles', adminRoleRoute)
 router.use('/users', adminUserRoute)
 router.use('/profile', adminProfileRoute)
+router.use('/reviews', adminReviewRoute)
 
 export const adminRouter = router

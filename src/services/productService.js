@@ -9,6 +9,7 @@ import ApiError from "~/utils/ApiError";
 import { slugify } from "~/utils/formatters";
 import { parseBool, parseNum } from "~/utils/parsers";
 import { CloudinaryProvider } from "~/providers/CloudinaryProvider";
+import { evaluateReviewModeration } from "~/utils/reviewModeration";
 
 // ─── Helper: generate unique slug ─────────────────────────────────────────────
 const generateUniqueSlug = async (title, providedSlug) => {
@@ -569,14 +570,25 @@ const createReviewClient = async (slug, reqBody, userId) => {
       );
     }
 
+    const normalizedReview = {
+      rating: reqBody.rating,
+      comment: reqBody.comment || "",
+      images: Array.isArray(reqBody.images) ? reqBody.images : [],
+    };
+
+    const moderationResult = evaluateReviewModeration(normalizedReview);
+    const nextStatus = moderationResult.status;
+    const rejectReason = moderationResult.reason;
+
     if (existingReview) {
       await reviewModel.updateReview(
         existingReview._id.toString(),
         {
-          rating: reqBody.rating,
-          comment: reqBody.comment || "",
-          images: Array.isArray(reqBody.images) ? reqBody.images : [],
-          status: reviewModel.REVIEW_STATUSES.APPROVED,
+          rating: normalizedReview.rating,
+          comment: normalizedReview.comment,
+          images: normalizedReview.images,
+          status: nextStatus,
+          rejectReason: rejectReason,
         },
         targetOrderId,
       );
@@ -584,23 +596,29 @@ const createReviewClient = async (slug, reqBody, userId) => {
       const newReview = {
         productId: product._id.toString(),
         userId,
-        rating: reqBody.rating,
-        comment: reqBody.comment || "",
-        images: Array.isArray(reqBody.images) ? reqBody.images : [],
+        rating: normalizedReview.rating,
+        comment: normalizedReview.comment,
+        images: normalizedReview.images,
         orderIds: [targetOrderId],
-        status: reviewModel.REVIEW_STATUSES.APPROVED,
+        status: nextStatus,
+        rejectReason: rejectReason,
         createdAt: new Date(),
       };
 
       await reviewModel.createNew(newReview);
     }
 
-    const ratings = await productModel.syncRatingsFromReviews(
-      product._id.toString(),
-    );
+    const shouldSyncRatings =
+      nextStatus === reviewModel.REVIEW_STATUSES.APPROVED ||
+      existingReview?.status === reviewModel.REVIEW_STATUSES.APPROVED;
+
+    const ratings = shouldSyncRatings
+      ? await productModel.syncRatingsFromReviews(product._id.toString())
+      : null;
 
     return {
       message: "Đánh giá sản phẩm thành công!",
+      status: nextStatus,
       ratings,
     };
   } catch (error) {
