@@ -37,7 +37,7 @@ const createNew = async (req, res, next) => {
       totalRating: Joi.number().optional(),
       numberOfRatings: Joi.number().integer().optional(),
     }).optional(),
-    position: Joi.number().integer().optional(),
+    position: Joi.alternatives().try(Joi.number().integer(), Joi.string().allow(''), Joi.allow(null)).optional(),
     primary_category_id: Joi.alternatives()
       .try(Joi.string(), Joi.allow(null))
       .optional(),
@@ -78,7 +78,7 @@ const update = async (req, res, next) => {
       totalRating: Joi.number().optional(),
       numberOfRatings: Joi.number().integer().optional(),
     }).optional(),
-    position: Joi.number().integer().optional(),
+    position: Joi.alternatives().try(Joi.number().integer(), Joi.string().allow(''), Joi.allow(null)).optional(),
     primary_category_id: Joi.alternatives()
       .try(Joi.string(), Joi.allow(null))
       .optional(),

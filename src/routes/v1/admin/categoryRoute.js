@@ -2,24 +2,30 @@ import express from 'express'
 import { authMiddleware } from '~/middlewares/authMiddleware'
 import { categoryController } from '~/controllers/categoryController'
 import { categoryValidation } from '~/validations/categoryValidation'
+import { multerUploadMiddleware } from '~/middlewares/multerUploadMiddleware'
 
 const Router = express.Router()
 
-// Áp dụng auth + isAdmin cho toàn bộ admin category routes
 Router.use(authMiddleware.isAuthorized, authMiddleware.isAdmin)
 
-// GET    /v1/admin/categories      → Danh sách (có filter, sort, pagination)
-// POST   /v1/admin/categories      → Tạo mới
+const categoryUpload = multerUploadMiddleware.upload.fields([
+  { name: 'thumbnail', maxCount: 1 },
+  { name: 'bannerImage', maxCount: 1 }
+])
+
 Router.route('/')
   .get(categoryController.getListAdmin)
-  .post(categoryValidation.createNew, categoryController.createNew)
+  .post(categoryUpload, categoryValidation.createNew, categoryController.createNew)
 
-// GET    /v1/admin/categories/:id  → Chi tiết
-// PUT    /v1/admin/categories/:id  → Cập nhật
-// DELETE /v1/admin/categories/:id  → Xoá mềm
+Router.route('/bulk-status')
+  .put(categoryValidation.bulkUpdateStatus, categoryController.bulkUpdateStatusAdmin)
+
+Router.route('/bulk')
+  .delete(categoryValidation.bulkDelete, categoryController.bulkDeleteAdmin)
+
 Router.route('/:id')
   .get(categoryController.getDetailAdmin)
-  .put(categoryValidation.update, categoryController.update)
+  .put(categoryUpload, categoryValidation.update, categoryController.update)
   .delete(categoryController.softDelete)
 
 export const adminCategoryRoute = Router

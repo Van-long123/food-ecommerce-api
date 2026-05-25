@@ -6,7 +6,7 @@ import { categoryService } from '~/services/categoryService'
 const createNew = async (req, res, next) => {
   try {
     const actorId = req.jwtDecoded._id
-    const result = await categoryService.createNew(req.body, actorId)
+    const result = await categoryService.createNew(req.body, actorId, req.files)
     res.status(StatusCodes.CREATED).json(result)
   } catch (error) {
     next(error)
@@ -34,7 +34,7 @@ const getDetailAdmin = async (req, res, next) => {
 const update = async (req, res, next) => {
   try {
     const actorId = req.jwtDecoded._id
-    const result = await categoryService.update(req.params.id, req.body, actorId)
+    const result = await categoryService.update(req.params.id, req.body, actorId, req.files)
     res.status(StatusCodes.OK).json(result)
   } catch (error) {
     next(error)
@@ -45,6 +45,25 @@ const softDelete = async (req, res, next) => {
   try {
     const actorId = req.jwtDecoded._id
     const result = await categoryService.softDelete(req.params.id, actorId)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const bulkUpdateStatusAdmin = async (req, res, next) => {
+  try {
+    const result = await categoryService.bulkUpdateStatusAdmin(req.body)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+const bulkDeleteAdmin = async (req, res, next) => {
+  try {
+    const actorId = req.jwtDecoded._id
+    const result = await categoryService.bulkDeleteAdmin(req.body, actorId)
     res.status(StatusCodes.OK).json(result)
   } catch (error) {
     next(error)
@@ -86,6 +105,8 @@ export const categoryController = {
   getDetailAdmin,
   update,
   softDelete,
+  bulkUpdateStatusAdmin,
+  bulkDeleteAdmin,
   getListClient,
   getDetailClient,
   getProductsClient

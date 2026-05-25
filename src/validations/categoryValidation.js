@@ -13,8 +13,8 @@ const createNew = async (req, res, next) => {
     badgeText: Joi.string().optional().allow(''),
     status: Joi.string().valid('active', 'inactive').optional(),
     featured: Joi.boolean().optional(),
-    position: Joi.number().integer().optional(),
-    parent_id: Joi.alternatives().try(Joi.string(), Joi.allow(null)).optional()
+    position: Joi.alternatives().try(Joi.number().integer(), Joi.string().allow(''), Joi.allow(null)).optional(),
+    parent_id: Joi.alternatives().try(Joi.string().allow(''), Joi.allow(null)).optional()
   })
 
   try {
@@ -36,8 +36,8 @@ const update = async (req, res, next) => {
     badgeText: Joi.string().optional().allow(''),
     status: Joi.string().valid('active', 'inactive').optional(),
     featured: Joi.boolean().optional(),
-    position: Joi.number().integer().optional(),
-    parent_id: Joi.alternatives().try(Joi.string(), Joi.allow(null)).optional()
+    position: Joi.alternatives().try(Joi.number().integer(), Joi.string().allow(''), Joi.allow(null)).optional(),
+    parent_id: Joi.alternatives().try(Joi.string().allow(''), Joi.allow(null)).optional()
   })
 
   try {
@@ -48,4 +48,31 @@ const update = async (req, res, next) => {
   }
 }
 
-export const categoryValidation = { createNew, update }
+const bulkUpdateStatus = async (req, res, next) => {
+  const schema = Joi.object({
+    category_ids: Joi.array().items(Joi.string().required()).min(1).required(),
+    status: Joi.string().valid('active', 'inactive').required(),
+  })
+
+  try {
+    await schema.validateAsync(req.body, { abortEarly: false })
+    next()
+  } catch (error) {
+    next(new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, error.message))
+  }
+}
+
+const bulkDelete = async (req, res, next) => {
+  const schema = Joi.object({
+    category_ids: Joi.array().items(Joi.string().required()).min(1).required(),
+  })
+
+  try {
+    await schema.validateAsync(req.body, { abortEarly: false })
+    next()
+  } catch (error) {
+    next(new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, error.message))
+  }
+}
+
+export const categoryValidation = { createNew, update, bulkUpdateStatus, bulkDelete }

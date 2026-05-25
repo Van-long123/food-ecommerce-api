@@ -52,8 +52,6 @@ const syncCategories = async (
     categoryProductModel.upsert({
       product_id: productId,
       category_id: catId,
-      position: index,
-      isPrimary: catId === primaryCategoryId,
     }),
   );
   await Promise.all(promises);
@@ -74,9 +72,11 @@ const createNew = async (reqBody, actorId, files = null) => {
 
     // Auto-calculate position nếu không có hoặc bằng 0
     let position = reqBody.position;
-    if (position === undefined || position === null || position === 0) {
+    if (position === undefined || position === null || position === 0 || position === "0" || position === "") {
       const maxPos = await productModel.getMaxPosition();
       position = maxPos + 1;
+    } else {
+      position = parseNum(position, 0);
     }
 
     // Xử lý ảnh
@@ -261,6 +261,9 @@ const update = async (id, reqBody, actorId, files = null) => {
     if (reqBody.discountPercentage !== undefined) {
       updateData.discountPercentage = parseNum(reqBody.discountPercentage, 0);
     }
+    if (reqBody.position !== undefined && reqBody.position !== null && reqBody.position !== "") {
+      updateData.position = parseNum(reqBody.position, 0);
+    }
     if (reqBody.originalPrice !== undefined) {
       updateData.originalPrice = parseNum(reqBody.originalPrice);
     }
@@ -368,8 +371,6 @@ const addCategory = async (productId, reqBody) => {
     await categoryProductModel.upsert({
       product_id: productId,
       category_id: reqBody.category_id,
-      position: reqBody.position ?? 0,
-      isPrimary: reqBody.isPrimary ?? false,
     });
 
     // Nếu set làm primary → cập nhật primary_category_id trên product

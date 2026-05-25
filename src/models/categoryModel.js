@@ -68,6 +68,22 @@ const CATEGORY_COLLECTION_SCHEMA = Joi.object({
 
 const INVALID_UPDATE_FIELDS = ["_id", "createdBy", "createdAt", "deletedAt"];
 
+const toObjectIdOrNull = (value) => {
+  if (!value || value === "null") return null;
+  return new ObjectId(value);
+};
+
+const toObjectIdArray = (ids = []) =>
+  ids
+    .map((id) => {
+      try {
+        return new ObjectId(id);
+      } catch (error) {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
 const validateBeforeCreate = async (data) => {
   return await CATEGORY_COLLECTION_SCHEMA.validateAsync(data, {
     abortEarly: false,
@@ -79,7 +95,7 @@ const createNew = async (data) => {
     const validData = await validateBeforeCreate(data);
     const persistData = {
       ...validData,
-      parent_id: validData.parent_id ? new ObjectId(validData.parent_id) : null,
+      parent_id: toObjectIdOrNull(validData.parent_id),
     };
     const result = await GET_DB()
       .collection(CATEGORY_COLLECTION_NAME)
@@ -229,8 +245,8 @@ const update = async (id, updateData) => {
       ...updateData,
       updatedAt: new Date(),
     };
-    if (persistUpdateData.parent_id) {
-      persistUpdateData.parent_id = new ObjectId(persistUpdateData.parent_id);
+    if (Object.prototype.hasOwnProperty.call(persistUpdateData, "parent_id")) {
+      persistUpdateData.parent_id = toObjectIdOrNull(persistUpdateData.parent_id);
     }
 
     const result = await GET_DB()
@@ -283,6 +299,73 @@ const softDelete = async (id, actorId, actorEmail) => {
   }
 };
 
+const bulkUpdateStatus = async (ids = [], status) => {
+  try {
+    const objectIds = toObjectIdArray(ids);
+    if (!objectIds.length) {
+      return { modifiedCount: 0 };
+    }
+
+    const result = await GET_DB()
+      .collection(CATEGORY_COLLECTION_NAME)
+      .updateMany(
+        { _id: { $in: objectIds }, deleted: false },
+        {
+          $set: {
+            status,
+            updatedAt: new Date(),
+          },
+        },
+      );
+
+    return { modifiedCount: result.modifiedCount || 0 };
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const bulkSoftDelete = async (ids = [], actorId, actorEmail) => {
+  try {
+    const objectIds = toObjectIdArray(ids);
+    if (!objectIds.length) {
+      return { modifiedCount: 0 };
+    }
+
+    const result = await GET_DB()
+      .collection(CATEGORY_COLLECTION_NAME)
+      .updateMany(
+        { _id: { $in: objectIds }, deleted: false },
+        {
+          $set: {
+            deleted: true,
+            deletedAt: new Date(),
+            deletedBy: { account_id: actorId, email: actorEmail },
+            updatedAt: new Date(),
+          },
+        },
+      );
+
+    return { modifiedCount: result.modifiedCount || 0 };
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const getMaxPosition = async () => {
+  try {
+    const result = await GET_DB()
+      .collection(CATEGORY_COLLECTION_NAME)
+      .find({ deleted: false })
+      .sort({ position: -1 })
+      .limit(1)
+      .project({ position: 1 })
+      .toArray();
+    return result[0]?.position ?? 0;
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
 export const categoryModel = {
   CATEGORY_TYPES,
   CATEGORY_STATUSES,
@@ -297,4 +380,7 @@ export const categoryModel = {
   update,
   pushUpdatedBy,
   softDelete,
+  bulkUpdateStatus,
+  bulkSoftDelete,
+  getMaxPosition,
 };

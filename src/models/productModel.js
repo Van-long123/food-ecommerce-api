@@ -291,7 +291,6 @@ const getDetails = async (identifier) => {
                   $expr: { $eq: ["$product_id", "$$productId"] },
                 },
               },
-              { $sort: { position: 1 } },
               // Nested lookup: JOIN từ bảng trung gian sang Categories
               {
                 $lookup: {
@@ -1027,4 +1026,5 @@ export const productModel = {
   findOneBySlugOrId,
   updateManyStatus,
   softDeleteMany,
+  getMaxPosition,
 };

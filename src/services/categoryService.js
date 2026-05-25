@@ -4,7 +4,8 @@ import { productModel } from '~/models/productModel'
 import { userModel } from '~/models/userModel'
 import ApiError from '~/utils/ApiError'
 import { slugify } from '~/utils/formatters'
-import { parsePositiveInt, toNumberOrNull } from '~/utils/parsers'
+import { CloudinaryProvider } from '~/providers/CloudinaryProvider'
+import { parseBool, parseNum, parsePositiveInt, toNumberOrNull } from '~/utils/parsers'
 
 // ─── Helper: generate unique slug ─────────────────────────────────────────────
 const generateUniqueSlug = async (title, providedSlug) => {
@@ -13,29 +14,69 @@ const generateUniqueSlug = async (title, providedSlug) => {
   return existing ? `${baseSlug}-${Date.now()}` : baseSlug
 }
 
+const normalizeParentId = (value) => {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  const normalized = String(value).trim()
+  if (!normalized || normalized === 'null') return null
+  return normalized
+}
+
+const uploadCategoryImage = async (file, folderName) => {
+  if (!file) return ''
+  const result = await CloudinaryProvider.streamUpload(file.buffer, folderName, file.mimetype)
+  return result?.secure_url || ''
+}
+
+const uploadCategoryField = async (files, fieldName, existingValue = '') => {
+  const fieldFiles = files?.[fieldName] || []
+  if (fieldFiles.length > 0) {
+    return await uploadCategoryImage(fieldFiles[0], 'smartfood-categories')
+  }
+  return existingValue
+}
+
 // ─── ADMIN: Create ────────────────────────────────────────────────────────────
-const createNew = async (reqBody, actorId) => {
+const createNew = async (reqBody, actorId, files = null) => {
   try {
     const slug = await generateUniqueSlug(reqBody.title, reqBody.slug)
 
     const actor = await userModel.findOneById(actorId)
     if (!actor) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản người thực hiện!')
 
+    const thumbnailFromBody = reqBody.thumbnail_url || reqBody.thumbnail || ''
+    const bannerFromBody = reqBody.bannerImage_url || reqBody.bannerImage || ''
+    const thumbnail = await uploadCategoryField(files, 'thumbnail', thumbnailFromBody)
+    const bannerImage = await uploadCategoryField(files, 'bannerImage', bannerFromBody)
+
+    let position = reqBody.position;
+    if (position === undefined || position === null || position === '') {
+      const maxPos = await categoryModel.getMaxPosition();
+      position = maxPos + 1;
+    } else {
+      position = parseNum(reqBody.position, 0);
+    }
+
     const newCategory = {
       title: reqBody.title,
       slug,
       type: reqBody.type,
       description: reqBody.description || '',
-      thumbnail: reqBody.thumbnail || '',
+      thumbnail,
+      bannerImage,
+      badgeText: reqBody.badgeText || '',
       status: reqBody.status || 'active',
-      featured: reqBody.featured ?? false,
-      position: reqBody.position ?? 0,
-      parent_id: reqBody.parent_id || null,
+      featured: parseBool(reqBody.featured),
+      position,
+      parent_id: normalizeParentId(reqBody.parent_id),
       createdBy: { account_id: actorId, email: actor.email }
     }
 
     const created = await categoryModel.createNew(newCategory)
-    return await categoryModel.findOneById(created.insertedId)
+    const category = await categoryModel.findOneById(created.insertedId)
+    if (!category) return null
+
+    return category
   } catch (error) {
     throw error
   }
@@ -48,17 +89,22 @@ const getListAdmin = async (query) => {
     const limit = parseInt(query.limit) || 10
     const sortField = query.sortField || 'position'
     const sortOrder = query.sortOrder === 'desc' ? -1 : 1
+    const searchQuery = String(query.searchQuery || query.keyword || '').trim()
+    const typeFilter = query.typeFilter || query.type
+    const statusFilter = query.statusFilter || query.status
 
     // Xây dựng queryConditions kiểu array (giống boardModel.getBoards)
     const queryConditions = [{ deleted: false }]
-    if (query.type) queryConditions.push({ type: query.type })
-    if (query.status) queryConditions.push({ status: query.status })
+    if (typeFilter && typeFilter !== 'all') queryConditions.push({ type: typeFilter })
+    if (statusFilter && statusFilter !== 'all') queryConditions.push({ status: statusFilter })
     if (query.featured !== undefined) queryConditions.push({ featured: query.featured === 'true' })
-    if (query.keyword) {
+    if (searchQuery) {
       queryConditions.push({
         $or: [
-          { title: { $regex: new RegExp(query.keyword, 'i') } },
-          { description: { $regex: new RegExp(query.keyword, 'i') } }
+          { title: { $regex: new RegExp(searchQuery, 'i') } },
+          { slug: { $regex: new RegExp(searchQuery, 'i') } },
+          { description: { $regex: new RegExp(searchQuery, 'i') } },
+          { badgeText: { $regex: new RegExp(searchQuery, 'i') } }
         ]
       })
     }
@@ -78,14 +124,24 @@ const getDetailAdmin = async (id) => {
   try {
     const category = await categoryModel.findOneById(id)
     if (!category || category.deleted) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy category!')
-    return category
+
+    let parent = null
+    if (category.parent_id) {
+      parent = await categoryModel.findOneById(category.parent_id.toString())
+      if (parent && parent.deleted) parent = null
+    }
+
+    return {
+      ...category,
+      parent
+    }
   } catch (error) {
     throw error
   }
 }
 
 // ─── ADMIN: Update ────────────────────────────────────────────────────────────
-const update = async (id, reqBody, actorId) => {
+const update = async (id, reqBody, actorId, files = null) => {
   try {
     const category = await categoryModel.findOneById(id)
     if (!category || category.deleted) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy category!')
@@ -96,6 +152,20 @@ const update = async (id, reqBody, actorId) => {
     const updateData = { ...reqBody, updatedAt: new Date() }
     delete updateData.createdBy
     delete updateData.createdAt
+
+    const thumbnailFromBody = reqBody.thumbnail_url || reqBody.thumbnail || category.thumbnail || ''
+    const bannerFromBody = reqBody.bannerImage_url || reqBody.bannerImage || category.bannerImage || ''
+
+    updateData.thumbnail = await uploadCategoryField(files, 'thumbnail', thumbnailFromBody)
+    updateData.bannerImage = await uploadCategoryField(files, 'bannerImage', bannerFromBody)
+    updateData.badgeText = reqBody.badgeText ?? category.badgeText ?? ''
+    updateData.featured = parseBool(reqBody.featured ?? category.featured)
+    updateData.position = reqBody.position !== undefined ? parseNum(reqBody.position, category.position || 0) : category.position || 0
+    updateData.parent_id = normalizeParentId(reqBody.parent_id)
+
+    if (updateData.parent_id === undefined) {
+      updateData.parent_id = category.parent_id ? category.parent_id.toString() : null
+    }
 
     // Xử lý slug
     if (reqBody.title && !reqBody.slug) {
@@ -109,7 +179,8 @@ const update = async (id, reqBody, actorId) => {
     }
 
     await categoryModel.pushUpdatedBy(id, actorId, actor.email)
-    return await categoryModel.update(id, updateData)
+    await categoryModel.update(id, updateData)
+    return await categoryModel.findOneById(id)
   } catch (error) {
     throw error
   }
@@ -125,6 +196,27 @@ const softDelete = async (id, actorId) => {
     if (!actor) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản người thực hiện!')
 
     return await categoryModel.softDelete(id, actorId, actor.email)
+  } catch (error) {
+    throw error
+  }
+}
+
+const bulkUpdateStatusAdmin = async (reqBody) => {
+  try {
+    const result = await categoryModel.bulkUpdateStatus(reqBody.category_ids, reqBody.status)
+    return { updatedCount: result.modifiedCount || 0 }
+  } catch (error) {
+    throw error
+  }
+}
+
+const bulkDeleteAdmin = async (reqBody, actorId) => {
+  try {
+    const actor = await userModel.findOneById(actorId)
+    if (!actor) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản người thực hiện!')
+
+    const result = await categoryModel.bulkSoftDelete(reqBody.category_ids, actorId, actor.email)
+    return { deletedCount: result.modifiedCount || 0 }
   } catch (error) {
     throw error
   }
@@ -257,6 +349,8 @@ export const categoryService = {
   getDetailAdmin,
   update,
   softDelete,
+  bulkUpdateStatusAdmin,
+  bulkDeleteAdmin,
   getListClient,
   getDetailClient,
   getProductsClient

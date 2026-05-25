@@ -7,8 +7,6 @@ const CATEGORY_PRODUCT_COLLECTION_NAME = 'category_products'
 const CATEGORY_PRODUCT_COLLECTION_SCHEMA = Joi.object({
   category_id: Joi.any().required(),
   product_id: Joi.any().required(),
-  position: Joi.number().integer().min(0).default(0),
-  isPrimary: Joi.boolean().default(false),
   createdAt: Joi.date().default(() => new Date()),
   updatedAt: Joi.date().default(null)
 })
@@ -20,14 +18,14 @@ const validateBeforeCreate = async (data) => {
 /**
  * Upsert: nếu đã tồn tại (product_id + category_id) thì update, chưa có thì insert
  */
-const upsert = async ({ product_id, category_id, position = 0, isPrimary = false }) => {
+const upsert = async ({ product_id, category_id }) => {
   try {
     const filter = {
       product_id: new ObjectId(product_id),
       category_id: new ObjectId(category_id)
     }
     const update = {
-      $set: { position, isPrimary, updatedAt: new Date() },
+      $set: { updatedAt: new Date() },
       $setOnInsert: {
         product_id: new ObjectId(product_id),
         category_id: new ObjectId(category_id),
@@ -80,7 +78,6 @@ const findAllByProductId = async (product_id) => {
     return await GET_DB()
       .collection(CATEGORY_PRODUCT_COLLECTION_NAME)
       .find({ product_id: new ObjectId(product_id) })
-      .sort({ position: 1 })
       .toArray()
   } catch (error) {
     throw new Error(error)
