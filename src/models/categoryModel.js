@@ -269,7 +269,7 @@ const pushUpdatedBy = async (id, actorId, actorEmail) => {
       .updateOne(
         { _id: new ObjectId(id) },
         {
-          $push: { updatedBy: { account_id: actorId, email: actorEmail } },
+          $push: { updatedBy: { account_id: new ObjectId(actorId), email: actorEmail } },
           $set: { updatedAt: new Date() },
         },
       );
@@ -288,7 +288,7 @@ const softDelete = async (id, actorId, actorEmail) => {
           $set: {
             deleted: true,
             deletedAt: new Date(),
-            deletedBy: { account_id: actorId, email: actorEmail },
+            deletedBy: { account_id: new ObjectId(actorId), email: actorEmail },
           },
         },
         { returnDocument: "after" },
@@ -339,7 +339,7 @@ const bulkSoftDelete = async (ids = [], actorId, actorEmail) => {
           $set: {
             deleted: true,
             deletedAt: new Date(),
-            deletedBy: { account_id: actorId, email: actorEmail },
+            deletedBy: { account_id: new ObjectId(actorId), email: actorEmail },
             updatedAt: new Date(),
           },
         },

@@ -112,6 +112,9 @@ const createNew = async (data) => {
     if (validData.roleId) {
       validData.roleId = new ObjectId(String(validData.roleId));
     }
+    if (validData.createdBy?.account_id) {
+      validData.createdBy.account_id = new ObjectId(String(validData.createdBy.account_id));
+    }
     const createdUser = await GET_DB()
       .collection(USER_COLLECTION_NAME)
       .insertOne(validData);
@@ -252,7 +255,12 @@ const softDelete = async (id, deletedBy = null) => {
       deletedAt: new Date(),
       updatedAt: new Date(),
     };
-    if (deletedBy) updateData.deletedBy = deletedBy;
+    if (deletedBy) {
+      updateData.deletedBy = deletedBy;
+      if (updateData.deletedBy.account_id) {
+        updateData.deletedBy.account_id = new ObjectId(String(updateData.deletedBy.account_id));
+      }
+    }
 
     return await GET_DB()
       .collection(USER_COLLECTION_NAME)
@@ -278,7 +286,12 @@ const softDeleteMany = async (ids = [], deletedBy = null) => {
       deletedAt: new Date(),
       updatedAt: new Date(),
     };
-    if (deletedBy) updateData.deletedBy = deletedBy;
+    if (deletedBy) {
+      updateData.deletedBy = deletedBy;
+      if (updateData.deletedBy.account_id) {
+        updateData.deletedBy.account_id = new ObjectId(String(updateData.deletedBy.account_id));
+      }
+    }
 
     return await GET_DB()
       .collection(USER_COLLECTION_NAME)

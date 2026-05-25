@@ -9,6 +9,7 @@ import { adminRoleRoute } from './roleRoute'
 import { adminUserRoute } from './userRoute'
 import { adminProfileRoute } from './profileRoute'
 import { adminReviewRoute } from './reviewRoute'
+import { adminVoucherRoute } from './voucherRoute'
 
 
 const router = express.Router()
@@ -24,5 +25,6 @@ router.use('/roles', adminRoleRoute)
 router.use('/users', adminUserRoute)
 router.use('/profile', adminProfileRoute)
 router.use('/reviews', adminReviewRoute)
+router.use('/vouchers', adminVoucherRoute)
 
 export const adminRouter = router

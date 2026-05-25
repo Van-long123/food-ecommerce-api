@@ -35,14 +35,16 @@ const normalizeValidationItems = (items = []) => {
 const isItemInVoucherScope = (voucher, item) => {
   if (voucher.applyFor === voucherModel.VOUCHER_APPLY_FOR.ALL) return true;
 
+  const applyForIdsStr = voucher.applyForIds?.map((id) => String(id)) || [];
+
   if (voucher.applyFor === voucherModel.VOUCHER_APPLY_FOR.CATEGORY) {
     return (
-      Boolean(item.categoryId) && voucher.applyForIds.includes(item.categoryId)
+      Boolean(item.categoryId) && applyForIdsStr.includes(item.categoryId)
     );
   }
 
   if (voucher.applyFor === voucherModel.VOUCHER_APPLY_FOR.PRODUCT) {
-    return voucher.applyForIds.includes(item.productId);
+    return applyForIdsStr.includes(item.productId);
   }
 
   return true;

@@ -550,7 +550,7 @@ const pushUpdatedBy = async (id, actorId, actorEmail) => {
       .updateOne(
         { _id: new ObjectId(id) },
         {
-          $push: { updatedBy: { account_id: actorId, email: actorEmail } },
+          $push: { updatedBy: { account_id: new ObjectId(actorId), email: actorEmail } },
           $set: { updatedAt: new Date() },
         },
       );
@@ -569,7 +569,7 @@ const softDelete = async (id, actorId, actorEmail) => {
           $set: {
             deleted: true,
             deletedAt: new Date(),
-            deletedBy: { account_id: actorId, email: actorEmail },
+            deletedBy: { account_id: new ObjectId(actorId), email: actorEmail },
           },
         },
         { returnDocument: "after" },
@@ -988,7 +988,7 @@ const softDeleteMany = async (ids = [], actorId, actorEmail) => {
       deletedAt: new Date(),
     };
     if (actorId && actorEmail) {
-      updateData.deletedBy = { account_id: actorId, email: actorEmail };
+      updateData.deletedBy = { account_id: new ObjectId(actorId), email: actorEmail };
     }
 
     return await GET_DB().collection(PRODUCT_COLLECTION_NAME).updateMany(

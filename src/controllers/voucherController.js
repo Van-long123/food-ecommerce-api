@@ -28,6 +28,13 @@ const getListAdmin = async (req, res, next) => {
   } catch (error) { next(error) }
 }
 
+const getDetailAdmin = async (req, res, next) => {
+  try {
+    const result = await voucherService.getDetailAdmin(req.params.id)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) { next(error) }
+}
+
 const createNew = async (req, res, next) => {
   try {
     const result = await voucherService.createNew(req.body, req.jwtDecoded._id)
@@ -49,11 +56,28 @@ const deleteVoucher = async (req, res, next) => {
   } catch (error) { next(error) }
 }
 
+const bulkUpdateStatusAdmin = async (req, res, next) => {
+  try {
+    const result = await voucherService.bulkUpdateStatusAdmin(req.body)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) { next(error) }
+}
+
+const bulkDeleteAdmin = async (req, res, next) => {
+  try {
+    const result = await voucherService.bulkDeleteAdmin(req.body, req.jwtDecoded._id)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) { next(error) }
+}
+
 export const voucherController = {
   getListClient,
   validateVoucher,
   getListAdmin,
+  getDetailAdmin,
   createNew,
   updateVoucher,
-  deleteVoucher
+  deleteVoucher,
+  bulkUpdateStatusAdmin,
+  bulkDeleteAdmin
 }

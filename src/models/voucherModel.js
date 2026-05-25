@@ -9,7 +9,7 @@ const VOUCHER_TYPES = {
   MONEY: "money",
   PERCENT: "percent",
   FREESHIP: "freeship",
-  PRODUCT: "product",
+  // PRODUCT: "product",
 };
 
 const VOUCHER_STATUSES = {
@@ -21,7 +21,7 @@ const VOUCHER_STATUSES = {
 const VOUCHER_APPLY_FOR = {
   ALL: "all",
   CATEGORY: "category",
-  PRODUCT: "product",
+  // PRODUCT: "product",
 };
 
 const VOUCHER_COLLECTION_SCHEMA = Joi.object({
@@ -106,6 +106,9 @@ const createNew = async (data) => {
         persistData.createdBy.createdAt,
       );
     }
+    if (persistData.createdBy?.account_id) {
+      persistData.createdBy.account_id = new ObjectId(persistData.createdBy.account_id);
+    }
     return await GET_DB()
       .collection(VOUCHER_COLLECTION_NAME)
       .insertOne(persistData);
@@ -162,7 +165,7 @@ const pushUpdatedBy = async (id, actorId, actorEmail) => {
       .updateOne(
         { _id: new ObjectId(id) },
         {
-          $push: { updatedBy: { account_id: actorId, email: actorEmail } },
+          $push: { updatedBy: { account_id: new ObjectId(actorId), email: actorEmail } },
           $set: { updatedAt: new Date() }
         },
       );
@@ -181,7 +184,7 @@ const softDelete = async (id, actorId, actorEmail) => {
           $set: {
             deleted: true,
             deletedAt: new Date(),
-            deletedBy: { account_id: actorId, email: actorEmail },
+            deletedBy: { account_id: new ObjectId(actorId), email: actorEmail },
           },
         },
         { returnDocument: "after" },
