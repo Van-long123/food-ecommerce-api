@@ -73,7 +73,13 @@ const createNew = async (reqBody, actorId, files = null) => {
 
     // Auto-calculate position nếu không có hoặc bằng 0
     let position = reqBody.position;
-    if (position === undefined || position === null || position === 0 || position === "0" || position === "") {
+    if (
+      position === undefined ||
+      position === null ||
+      position === 0 ||
+      position === "0" ||
+      position === ""
+    ) {
       const maxPos = await productModel.getMaxPosition();
       position = maxPos + 1;
     } else {
@@ -180,6 +186,8 @@ const getListAdmin = async (query) => {
       queryConditions.push({
         $or: [
           { title: { $regex: new RegExp(query.keyword, "i") } },
+          { slug: { $regex: new RegExp(query.keyword, "i") } },
+          { description: { $regex: new RegExp(query.keyword, "i") } },
           { tags: { $elemMatch: { $regex: new RegExp(query.keyword, "i") } } },
         ],
       });
@@ -262,7 +270,11 @@ const update = async (id, reqBody, actorId, files = null) => {
     if (reqBody.discountPercentage !== undefined) {
       updateData.discountPercentage = parseNum(reqBody.discountPercentage, 0);
     }
-    if (reqBody.position !== undefined && reqBody.position !== null && reqBody.position !== "") {
+    if (
+      reqBody.position !== undefined &&
+      reqBody.position !== null &&
+      reqBody.position !== ""
+    ) {
       updateData.position = parseNum(reqBody.position, 0);
     }
     if (reqBody.originalPrice !== undefined) {
@@ -440,7 +452,10 @@ const softDelete = async (id, actorId) => {
 const bulkUpdateStatusAdmin = async ({ product_ids = [], status }) => {
   try {
     if (!Array.isArray(product_ids) || product_ids.length === 0) {
-      throw new ApiError(StatusCodes.BAD_REQUEST, "Danh sách sản phẩm không hợp lệ!");
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Danh sách sản phẩm không hợp lệ!",
+      );
     }
 
     const result = await productModel.updateManyStatus(product_ids, status);
@@ -453,7 +468,10 @@ const bulkUpdateStatusAdmin = async ({ product_ids = [], status }) => {
 const bulkDeleteAdmin = async ({ product_ids = [] }, actorId) => {
   try {
     if (!Array.isArray(product_ids) || product_ids.length === 0) {
-      throw new ApiError(StatusCodes.BAD_REQUEST, "Danh sách sản phẩm không hợp lệ!");
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Danh sách sản phẩm không hợp lệ!",
+      );
     }
 
     const actor = await userModel.findOneById(actorId);
@@ -464,14 +482,17 @@ const bulkDeleteAdmin = async ({ product_ids = [] }, actorId) => {
       );
     }
 
-    const result = await productModel.softDeleteMany(product_ids, actorId, actor.email);
+    const result = await productModel.softDeleteMany(
+      product_ids,
+      actorId,
+      actor.email,
+    );
 
     return { deletedCount: result?.modifiedCount || 0 };
   } catch (error) {
     throw error;
   }
 };
-
 
 // ─── CLIENT: Get list ─────────────────────────────────────────────────────────
 const getListClient = async (query) => {

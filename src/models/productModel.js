@@ -105,6 +105,9 @@ const createNew = async (data) => {
       createdAt: new Date(validData.createdAt),
       updatedAt: validData.updatedAt ? new Date(validData.updatedAt) : null,
     };
+    if (persistData.createdBy?.account_id) {
+      persistData.createdBy.account_id = new ObjectId(persistData.createdBy.account_id);
+    }
     const result = await GET_DB()
       .collection(PRODUCT_COLLECTION_NAME)
       .insertOne(persistData);

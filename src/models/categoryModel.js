@@ -97,6 +97,9 @@ const createNew = async (data) => {
       ...validData,
       parent_id: toObjectIdOrNull(validData.parent_id),
     };
+    if (persistData.createdBy?.account_id) {
+      persistData.createdBy.account_id = new ObjectId(persistData.createdBy.account_id);
+    }
     const result = await GET_DB()
       .collection(CATEGORY_COLLECTION_NAME)
       .insertOne(persistData);

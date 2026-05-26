@@ -5,7 +5,7 @@ import { articleService } from '~/services/articleService'
 
 const createNew = async (req, res, next) => {
   try {
-    const result = await articleService.createNew(req.body, req.jwtDecoded._id)
+    const result = await articleService.createNew(req.body, req.jwtDecoded._id, req.files)
     res.status(StatusCodes.CREATED).json(result)
   } catch (error) { next(error) }
 }
@@ -26,7 +26,7 @@ const getDetailAdmin = async (req, res, next) => {
 
 const update = async (req, res, next) => {
   try {
-    const result = await articleService.update(req.params.id, req.body, req.jwtDecoded._id)
+    const result = await articleService.update(req.params.id, req.body, req.jwtDecoded._id, req.files)
     res.status(StatusCodes.OK).json(result)
   } catch (error) { next(error) }
 }
@@ -34,6 +34,20 @@ const update = async (req, res, next) => {
 const softDelete = async (req, res, next) => {
   try {
     const result = await articleService.softDelete(req.params.id, req.jwtDecoded._id)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) { next(error) }
+}
+
+const bulkUpdateStatusAdmin = async (req, res, next) => {
+  try {
+    const result = await articleService.bulkUpdateStatusAdmin(req.body)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) { next(error) }
+}
+
+const bulkDeleteAdmin = async (req, res, next) => {
+  try {
+    const result = await articleService.bulkDeleteAdmin(req.body, req.jwtDecoded._id)
     res.status(StatusCodes.OK).json(result)
   } catch (error) { next(error) }
 }
@@ -83,6 +97,8 @@ export const articleController = {
   getDetailAdmin,
   update,
   softDelete,
+  bulkUpdateStatusAdmin,
+  bulkDeleteAdmin,
   addCategory,
   removeCategory,
   getListClient,

@@ -91,6 +91,9 @@ const createNew = async (data) => {
         ? new ObjectId(validData.primary_category_id)
         : null,
     };
+    if (persistData.createdBy?.account_id) {
+      persistData.createdBy.account_id = new ObjectId(persistData.createdBy.account_id);
+    }
     const result = await GET_DB()
       .collection(ARTICLE_COLLECTION_NAME)
       .insertOne(persistData);
@@ -162,6 +165,42 @@ const getDetails = async (identifier, bySlug = false) => {
         {
           $addFields: {
             primary_category: { $arrayElemAt: ["$primary_category", 0] },
+          },
+        },
+        {
+          $lookup: {
+            from: "category_articles",
+            localField: "_id",
+            foreignField: "article_id",
+            as: "category_mappings",
+          },
+        },
+        {
+          $addFields: {
+            category_ids: {
+              $map: {
+                input: "$category_mappings",
+                as: "mapping",
+                in: "$$mapping.category_id",
+              },
+            },
+          },
+        },
+        {
+          $lookup: {
+            from: "categories",
+            localField: "category_ids",
+            foreignField: "_id",
+            pipeline: [
+              { $match: { deleted: false } },
+              { $project: { _id: 1, title: 1, slug: 1, thumbnail: 1 } },
+            ],
+            as: "categories",
+          },
+        },
+        {
+          $project: {
+            category_mappings: 0,
           },
         },
         {
@@ -472,6 +511,52 @@ const getHomeArticles = async (limit = 4) => {
   }
 };
 
+const updateManyStatus = async (
+  ids = [],
+  status = ARTICLE_STATUSES.ACTIVE,
+) => {
+  try {
+    const objectIds = ids
+      .filter((id) => ObjectId.isValid(id))
+      .map((id) => new ObjectId(id));
+    if (!objectIds.length) return { matchedCount: 0, modifiedCount: 0 };
+
+    return await GET_DB().collection(ARTICLE_COLLECTION_NAME).updateMany(
+      { _id: { $in: objectIds } },
+      { $set: { status, updatedAt: new Date() } },
+    );
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const softDeleteMany = async (ids = [], actorId, actorEmail) => {
+  try {
+    const objectIds = ids
+      .filter((id) => ObjectId.isValid(id))
+      .map((id) => new ObjectId(id));
+    if (!objectIds.length) return { matchedCount: 0, modifiedCount: 0 };
+
+    const updateData = {
+      deleted: true,
+      deletedAt: new Date(),
+    };
+    if (actorId && actorEmail) {
+      updateData.deletedBy = {
+        account_id: new ObjectId(actorId),
+        email: actorEmail,
+      };
+    }
+
+    return await GET_DB().collection(ARTICLE_COLLECTION_NAME).updateMany(
+      { _id: { $in: objectIds } },
+      { $set: updateData },
+    );
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
 export const articleModel = {
   ARTICLE_STATUSES,
   ARTICLE_COLLECTION_NAME,
@@ -487,4 +572,6 @@ export const articleModel = {
   incrementViews,
   softDelete,
   getHomeArticles,
+  updateManyStatus,
+  softDeleteMany,
 };
