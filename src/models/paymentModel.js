@@ -108,10 +108,124 @@ const updatePayOSCompleted = async (
   }
 };
 
+// Giả sử Service của bạn có một luồng thực thi chạy bên trong 1 Transaction tên là sessionA
+// Bước 1: Sửa trạng thái Thanh toán thành completed (Đã lưu nháp trong sessionA, nhưng chưa được Commit vào Database gốc).
+// Bước 2: Chạy hàm findById để lấy thông tin Thanh toán ra kiểm tra lại xem tổng tiền là bao nhiêu.
+// Trường hợp KHÔNG truyền session vào findById: Hàm này sẽ chạy ra ngoài DB gốc để tìm. Lúc này nó sẽ thấy trạng thái Thanh toán vẫn là pending (dữ liệu cũ), vì cái kết quả completed ở bước 1 vẫn bị giam trong Transaction chứ chưa được Commit ra ngoài. => Gây lỗi sai Logic code trầm trọng.
+// Trường hợp CÓ truyền session vào findById: MongoDB hiểu rằng hàm findById này thuộc về nhóm sessionA. Nó sẽ cho phép hàm này "nhìn thấy" dữ liệu nháp (trạng thái completed) vừa được sửa ở Bước 1.
+const findById = async (paymentId, options = {}) => {
+  try {
+    const { session, ...mongoOptions } = options;
+    const collection = GET_DB().collection(PAYMENT_COLLECTION_NAME);
+    return session
+      ? await collection.findOne(
+          { _id: new ObjectId(paymentId) },
+          { session, ...mongoOptions },
+        )
+      : await collection.findOne(
+          { _id: new ObjectId(paymentId) },
+          mongoOptions,
+        );
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const getAdminPayments = async (
+  {
+    query = {},
+    keyword = "",
+    sort = { createdAt: -1 },
+    skip = 0,
+    limit = 10,
+  } = {},
+  options = {},
+) => {
+  try {
+    const pipeline = [
+      {
+        $lookup: {
+          from: "orders",
+          localField: "orderId",
+          foreignField: "_id",
+          as: "order",
+        },
+      },
+      {
+        $addFields: {
+          order: { $arrayElemAt: ["$order", 0] },
+        },
+      },
+    ];
+
+    if (keyword) {
+      const kw = keyword.trim();
+      const isNumber = /^\d+$/.test(kw);
+      pipeline.push({
+        $match: {
+          $or: [
+            { transactionId: { $regex: kw, $options: "i" } },
+            { "order.userInfo.fullname": { $regex: kw, $options: "i" } },
+            ...(isNumber ? [{ "order.orderCode": Number(kw) }] : []),
+          ],
+        },
+      });
+    }
+
+    if (Object.keys(query).length) {
+      pipeline.unshift({ $match: query });
+    }
+
+    const countPipeline = [...pipeline, { $count: "total" }];
+    const dataPipeline = [
+      ...pipeline,
+      { $sort: sort },
+      { $skip: skip },
+      { $limit: Number(limit) },
+    ];
+
+    const collection = GET_DB().collection(PAYMENT_COLLECTION_NAME);
+    const [data, countResult] = await Promise.all([
+      collection.aggregate(dataPipeline, options).toArray(),
+      collection.aggregate(countPipeline, options).toArray(),
+    ]);
+
+    const total = countResult[0]?.total ?? 0;
+    return { data, total };
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const getPaymentStats = async (options = {}) => {
+  try {
+    return await GET_DB()
+      .collection(PAYMENT_COLLECTION_NAME)
+      .aggregate(
+        [
+          {
+            $group: {
+              _id: "$status",
+              count: { $sum: 1 },
+              totalAmount: { $sum: "$amount" },
+            },
+          },
+        ],
+        options,
+      )
+      .toArray();
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
 export const paymentModel = {
   PAYMENT_COLLECTION_NAME,
   createNew,
   updateStatus,
   updateStatusByOrderId,
   updatePayOSCompleted,
+  findById,
+  getAdminPayments,
+  getPaymentStats,
 };

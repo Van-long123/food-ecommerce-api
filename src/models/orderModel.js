@@ -1,4 +1,4 @@
-import Joi from "joi";
+  import Joi from "joi";
 import { ObjectId } from "mongodb";
 import { GET_DB } from "~/config/mongodb";
 
@@ -285,6 +285,123 @@ const findShippingOrdersOlderThan = async (olderThanDays = 3) => {
   }
 };
 
+const getAdminOrders = async (
+  { query = {}, sort = { createdAt: -1 }, skip = 0, limit = 10 } = {},
+  options = {},
+) => {
+  try {
+    return await GET_DB()
+      .collection(ORDER_COLLECTION_NAME)
+      .aggregate(
+        [
+          { $match: query },
+          { $sort: sort },
+          { $skip: skip },
+          { $limit: Number(limit) },
+          {
+            $lookup: {
+              from: "payments",
+              localField: "_id",
+              foreignField: "orderId",
+              as: "payment",
+            },
+          },
+          {
+            $lookup: {
+              from: "order_items",
+              localField: "_id",
+              foreignField: "orderId",
+              as: "items",
+            },
+          },
+          {
+            $addFields: {
+              payment: { $arrayElemAt: ["$payment", 0] },
+            },
+          },
+        ],
+        options,
+      )
+      .toArray();
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const countAdminOrders = async (query = {}, options = {}) => {
+  try {
+    return await GET_DB()
+      .collection(ORDER_COLLECTION_NAME)
+      .countDocuments(query, options);
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const getAdminOrderDetail = async (orderId, options = {}) => {
+  try {
+    const aggregatePipeline = [
+      { $match: { _id: new ObjectId(orderId) } },
+      {
+        $lookup: {
+          from: "order_items",
+          localField: "_id",
+          foreignField: "orderId",
+          as: "items",
+        },
+      },
+      {
+        $lookup: {
+          from: "payments",
+          localField: "_id",
+          foreignField: "orderId",
+          as: "payment",
+        },
+      },
+      {
+        $addFields: {
+          payment: { $arrayElemAt: ["$payment", 0] },
+        },
+      },
+    ];
+
+    const { session, ...mongoOptions } = options;
+    const collection = GET_DB().collection(ORDER_COLLECTION_NAME);
+    const result = session
+      ? await collection
+          .aggregate(aggregatePipeline, { session, ...mongoOptions })
+          .toArray()
+      : await collection.aggregate(aggregatePipeline, mongoOptions).toArray();
+
+    return result[0] || null;
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const updateAdminStatus = async (orderId, status, adminId, options = {}) => {
+  try {
+    const now = new Date();
+    const update = { status, updatedAt: now };
+    if (status === "delivered") update.deliveredAt = now;
+
+    return await GET_DB()
+      .collection(ORDER_COLLECTION_NAME)
+      .findOneAndUpdate(
+        { _id: new ObjectId(orderId) },
+        {
+          $set: update,
+          $push: {
+            updatedBy: { account_id: new ObjectId(adminId), updatedAt: now },
+          },
+        },
+        { returnDocument: "after", ...options },
+      );
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
 export const orderModel = {
   ORDER_COLLECTION_NAME,
   createNew,
@@ -296,4 +413,8 @@ export const orderModel = {
   findShippingOrdersOlderThan,
   findByOrderCode,
   listDeliveredOrderIdsByProduct,
+  getAdminOrders,
+  countAdminOrders,
+  getAdminOrderDetail,
+  updateAdminStatus,
 };

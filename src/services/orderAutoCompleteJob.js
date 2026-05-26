@@ -1,6 +1,5 @@
 import cron from "node-cron";
 import { orderModel } from "~/models/orderModel";
-import { paymentModel } from "~/models/paymentModel";
 import { productModel } from "~/models/productModel";
 import { GET_CLIENT } from "~/config/mongodb";
 import { env } from "~/config/environment";
@@ -11,7 +10,7 @@ import { env } from "~/config/environment";
 const AUTO_COMPLETE_DAYS = parseInt(env.ORDER_AUTO_COMPLETE_DAYS || "3", 10);
 
 /**
- * Xử lý một đơn hàng: chuyển "shipping" → "delivered", hoàn thành thanh toán COD,
+ * Xử lý một đơn hàng: chuyển "shipping" → "delivered"
  * và cộng dồn soldCount cho tất cả sản phẩm trong đơn.
  * Mỗi đơn hàng chạy trong một Transaction riêng để đảm bảo tính toàn vẹn dữ liệu.
  */
@@ -41,14 +40,9 @@ const processOneOrder = async (order) => {
       return;
     }
 
-    // 2. Hoàn tất thanh toán COD nếu có
-    const payment =
-      order.payment && order.payment.length > 0 ? order.payment[0] : null;
-    if (payment && payment.paymentMethod === "COD") {
-      await paymentModel.updateStatusByOrderId(orderId, "completed", {
-        session,
-      });
-    }
+    // 2. Không tự động hoàn tất thanh toán COD ở đây
+    // Vì dự án tách riêng luồng: Đơn hàng tự động "delivered" (đã nhận hàng),
+    // nhưng thanh toán COD vẫn ở trạng thái "Chờ xác nhận thanh toán" cho đến khi Admin đối soát và duyệt thủ công sang "completed".
 
     // 3. Tăng soldCount cho các sản phẩm
     const items = (order.items || []).map((item) => ({

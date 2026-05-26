@@ -1,6 +1,6 @@
 import { StatusCodes } from "http-status-codes";
+import { ObjectId } from "mongodb";
 import { orderModel } from "~/models/orderModel";
-import { orderItemModel } from "~/models/orderItemModel";
 import { productModel } from "~/models/productModel";
 import { paymentModel } from "~/models/paymentModel";
 import { voucherModel } from "~/models/voucherModel";
@@ -8,11 +8,24 @@ import { voucherUsageModel } from "~/models/voucherUsageModel";
 import { refundRequestModel } from "~/models/refundRequestModel";
 import { GET_CLIENT } from "~/config/mongodb";
 import ApiError from "~/utils/ApiError";
+import { userModel } from "~/models/userModel";
+import { sendMail } from "~/utils/sendMail";
+import { getOrderShippingTemplate } from "~/templates/emailTemplates";
 
+// ── Luồng trạng thái hợp lệ (dùng chung cho Admin update)
+const ALLOWED_STATUS_TRANSITIONS = {
+  pending: ["confirmed", "cancelled"],
+  confirmed: ["processing", "cancelled"],
+  processing: ["shipping", "cancelled"],
+  shipping: ["delivered"],
+  delivered: ["returned"],
+  cancelled: [],
+  returned: [],
+};
+
+//  CLIENT-SIDE FUNCTIONS
 /**
  * Kiểm tra tồn kho thực tế trước khi checkout
- * @param {Array} items - [{ productId, quantity }, ...]
- * @returns { valid: [], clamped: [], outOfStock: [] }
  */
 const validateStockBeforeCheckout = async (items = []) => {
   try {
@@ -70,7 +83,7 @@ const validateStockBeforeCheckout = async (items = []) => {
         return;
       }
 
-      // Trường hợp Thiếu hàng (Muốn 100kg nhưng chỉ còn 10kg)
+      // Trường hợp thiếu hàng (muốn 100kg nhưng chỉ còn 10kg)
       if (requestedQty > stock) {
         result.clamped.push({
           productId,
@@ -112,7 +125,7 @@ const createNew = async (userId, payload) => {
     // 2. Prepare order items
     const orderItems = products.map((item) => ({
       orderId,
-      productId: item.id.toString(), // Chuyển sang string cho thống nhất model
+      productId: item.id.toString(),
       title: item.title,
       thumbnail: item.thumbnail,
       quantity: item.quantity,
@@ -122,8 +135,6 @@ const createNew = async (userId, payload) => {
 
     // 3. Save order items
     await orderItemModel.createMany(orderItems);
-
-    // Future: Reduce stock, remove from cart, clear voucher usage, etc.
 
     return {
       ...orderResult,
@@ -138,12 +149,11 @@ const getOrdersByUserId = async (userId) => {
   try {
     const orders = await orderModel.findByUserId(userId);
 
-    // Format response
     return orders.map((order) => ({
       _id: order._id,
       code: order.orderCode
         ? String(order.orderCode)
-        : order._id.toString().substring(18).toUpperCase(), // Dùng orderCode nếu có, không thì fallback về 6 ký tự cuối của ID
+        : order._id.toString().substring(18).toUpperCase(),
       status: order.status,
       totalPrice: order.totalPrice,
       createdAt: order.createdAt,
@@ -176,7 +186,6 @@ const getOrderDetails = async (orderId, userId) => {
       throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy đơn hàng");
     }
 
-    // Extract payment
     const payment =
       order.payment && order.payment.length > 0 ? order.payment[0] : null;
     delete order.payment;
@@ -191,13 +200,10 @@ const getOrderDetails = async (orderId, userId) => {
 };
 
 const cancelOrder = async (orderId, userId, payload = {}) => {
-  // Khởi tạo một session MongoDB mới để thực hiện Transaction
   const session = GET_CLIENT().startSession();
   try {
-    // Bắt đầu Transaction, đảm bảo tính toàn vẹn dữ liệu (nếu 1 bước lỗi sẽ rollback toàn bộ)
     session.startTransaction();
 
-    // 1. Kiểm tra tính hợp lệ của đơn hàng
     const order = await orderModel.findByIdAndUserId(orderId, userId);
     if (!order) {
       throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy đơn hàng");
@@ -210,18 +216,15 @@ const cancelOrder = async (orderId, userId, payload = {}) => {
       );
     }
 
-    // Lấy thông tin thanh toán của đơn hàng
     const payment =
       order.payment && order.payment.length > 0 ? order.payment[0] : null;
 
-    // Kiểm tra nhánh: Đơn hàng đã thanh toán thành công qua PayOS
     const isPaidViaPayOS =
       payment &&
       payment.paymentMethod === "PayOS" &&
       payment.status === "completed";
 
     if (isPaidViaPayOS) {
-      // Validate thông tin ngân hàng bắt buộc khi hủy đơn đã thanh toán PayOS
       const { reason, bankName, accountNumber, accountHolderName } = payload;
       if (!bankName || !accountNumber || !accountHolderName || !reason) {
         throw new ApiError(
@@ -231,7 +234,6 @@ const cancelOrder = async (orderId, userId, payload = {}) => {
       }
     }
 
-    // 2. Hoàn trả lại số lượng sản phẩm vào kho
     const items = order.items || [];
     for (const item of items) {
       await productModel.increaseStock(item.productId, item.quantity, {
@@ -239,13 +241,9 @@ const cancelOrder = async (orderId, userId, payload = {}) => {
       });
     }
 
-    // 3. Cập nhật trạng thái đơn hàng thành "cancelled" (đã hủy)
     await orderModel.updateStatus(orderId, userId, "cancelled", { session });
-
-    // 4. Cập nhật trạng thái giao dịch thanh toán tương ứng thành "cancelled"
     await paymentModel.updateStatusByOrderId(orderId, "cancelled", { session });
 
-    // 5. Khôi phục lại lượt sử dụng voucher nếu đơn hàng có áp dụng
     if (order.voucherCode) {
       const voucher = await voucherModel.findOneByCode(order.voucherCode);
       if (voucher) {
@@ -254,11 +252,9 @@ const cancelOrder = async (orderId, userId, payload = {}) => {
       }
     }
 
-    // 6. [BỔ SUNG] Nếu đơn đã thanh toán PayOS → tự động tạo Refund Request pending
     if (isPaidViaPayOS) {
       const { reason, bankName, accountNumber, accountHolderName } = payload;
 
-      // Map order items sang format của refund_requests
       const refundItems = items.map((item) => ({
         productId: item.productId.toString(),
         quantity: item.quantity,
@@ -284,7 +280,6 @@ const cancelOrder = async (orderId, userId, payload = {}) => {
       );
     }
 
-    // Xác nhận (commit) lưu tất cả các thay đổi của Transaction vào Database
     await session.commitTransaction();
 
     if (isPaidViaPayOS) {
@@ -297,32 +292,26 @@ const cancelOrder = async (orderId, userId, payload = {}) => {
     }
     return { success: true, message: "Hủy đơn hàng thành công" };
   } catch (error) {
-    // Nếu có lỗi xảy ra ở bất kỳ bước nào, hủy bỏ (rollback) toàn bộ các thay đổi
     await session.abortTransaction();
     throw error;
   } finally {
-    // Kết thúc và giải phóng session sau khi hoàn thành hoặc có lỗi
     await session.endSession();
   }
 };
 
 /**
- * Xác nhận đã nhận hàng — Bước quan trọng để mở khóa tính năng đánh giá sản phẩm.
- * Chỉ cho phép với đơn hàng đang ở trạng thái "shipping".
- * Thực hiện trong MongoDB Transaction để đảm bảo toàn vẹn dữ liệu.
+ * Xác nhận đã nhận hàng (client) — mở khóa tính năng đánh giá sản phẩm.
  */
 const confirmReceived = async (orderId, userId) => {
   const session = GET_CLIENT().startSession();
   try {
     session.startTransaction();
 
-    // 1. Kiểm tra tính hợp lệ: đơn hàng phải tồn tại và thuộc về user
     const order = await orderModel.findByIdAndUserId(orderId, userId);
     if (!order) {
       throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy đơn hàng");
     }
 
-    // 2. Ràng buộc nghiệp vụ: chỉ xác nhận được khi đang ở trạng thái shipping
     if (order.status !== "shipping") {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
@@ -330,8 +319,6 @@ const confirmReceived = async (orderId, userId) => {
       );
     }
 
-    // 3. Cập nhật trạng thái đơn hàng → "delivered" và ghi nhận mốc thời gian giao hàng
-    // Dùng điều kiện status=shipping ngay tại câu lệnh update để chống xử lý lặp khi có request đồng thời.
     const updatedOrder = await orderModel.updateStatusWithDeliveredAt(
       orderId,
       userId,
@@ -349,23 +336,12 @@ const confirmReceived = async (orderId, userId) => {
       );
     }
 
-    // 4. Nếu thanh toán COD → cập nhật trạng thái payment thành "completed"
-    const payment =
-      order.payment && order.payment.length > 0 ? order.payment[0] : null;
-    if (payment && payment.paymentMethod === "COD") {
-      await paymentModel.updateStatusByOrderId(orderId, "completed", {
-        session,
-      });
-    }
-
-    // 5. Tăng soldCount cho tất cả sản phẩm trong đơn hàng
     const items = (order.items || []).map((item) => ({
       productId: item.productId,
       quantity: item.quantity,
     }));
     await productModel.increaseSoldCountMany(items, { session });
 
-    // 6. Commit Transaction
     await session.commitTransaction();
     return { success: true, message: "Xác nhận nhận hàng thành công" };
   } catch (error) {
@@ -376,11 +352,361 @@ const confirmReceived = async (orderId, userId) => {
   }
 };
 
+//  ADMIN-SIDE FUNCTIONS
+/**
+ * Lấy danh sách đơn hàng cho Admin với phân trang, tìm kiếm, lọc, sắp xếp.
+ */
+const getAdminOrders = async ({
+  page = 1,
+  perPage = 10,
+  keyword = "",
+  status = "",
+  sortField = "createdAt",
+  sortOrder = "desc",
+} = {}) => {
+  try {
+    const query = {};
+    if (status && status !== "all") {
+      query.status = status;
+    }
+    if (keyword) {
+      const kw = keyword.trim();
+      const isNumber = /^\d+$/.test(kw);
+      query.$or = [
+        ...(isNumber ? [{ orderCode: Number(kw) }] : []),
+        { "userInfo.fullname": { $regex: kw, $options: "i" } },
+        { "userInfo.phone": { $regex: kw, $options: "i" } },
+        // { voucherCode: { $regex: kw, $options: "i" } },
+      ];
+    }
+
+    const sort = { [sortField]: sortOrder === "asc" ? 1 : -1 };
+    const skip = (page - 1) * perPage;
+
+    const [orders, total] = await Promise.all([
+      orderModel.getAdminOrders({ query, sort, skip, limit: perPage }),
+      orderModel.countAdminOrders(query),
+    ]);
+
+    return {
+      data: orders,
+      pagination: {
+        page: Number(page),
+        perPage: Number(perPage),
+        total,
+        totalPages: Math.ceil(total / perPage),
+      },
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Lấy chi tiết đơn hàng cho Admin (không ràng buộc userId).
+ * Tái sử dụng nội bộ bởi updateAdminOrderStatus và confirmCodPayment.
+ */
+const getAdminOrderDetail = async (orderId, session) => {
+  try {
+    const order = await orderModel.getAdminOrderDetail(orderId, { session });
+    if (!order) {
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy đơn hàng");
+    }
+    return order;
+  } catch (error) {
+    throw error;
+  }
+};
+
+const updateAdminOrderStatusInternal = async (
+  orderId,
+  newStatus,
+  adminId,
+  session,
+) => {
+  const order = await getAdminOrderDetail(orderId, session);
+
+  const allowed = ALLOWED_STATUS_TRANSITIONS[order.status] ?? [];
+  if (!allowed.includes(newStatus)) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      `Không thể chuyển từ trạng thái "${order.status}" sang "${newStatus}"`,
+    );
+  }
+
+  if (newStatus === "delivered") {
+    await orderModel.updateAdminStatus(orderId, newStatus, adminId, {
+      session,
+    });
+
+    const payment = order.payment;
+    if (payment && payment.paymentMethod === "COD") {
+      await paymentModel.updateStatusByOrderId(orderId, "completed", {
+        session,
+      });
+    }
+
+    const items = (order.items || []).map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+    }));
+    await productModel.increaseSoldCountMany(items, { session });
+  } else if (newStatus === "cancelled") {
+    const items = order.items || [];
+    for (const item of items) {
+      await productModel.increaseStock(item.productId, item.quantity, {
+        session,
+      });
+    }
+    await paymentModel.updateStatusByOrderId(orderId, "cancelled", {
+      session,
+    });
+    if (order.voucherCode) {
+      const voucher = await voucherModel.findOneByCode(order.voucherCode);
+      if (voucher) {
+        await voucherModel.decreaseUsedCount(voucher._id, { session });
+        await voucherUsageModel.deleteUsageByOrderId(orderId, { session });
+      }
+    }
+
+    await orderModel.updateAdminStatus(orderId, newStatus, adminId, {
+      session,
+    });
+  } else {
+    await orderModel.updateAdminStatus(orderId, newStatus, adminId, {
+      session,
+    });
+
+    if (newStatus === "shipping") {
+      try {
+        const user = await userModel.findOneById(order.userId.toString());
+        if (user && user.email) {
+          const emailHtml = getOrderShippingTemplate({
+            orderId: order._id.toString(),
+            customerName: order.userInfo?.fullname || user.fullname,
+            items: order.items || [],
+            totalPay: order.totalPrice || 0,
+          });
+
+          sendMail(
+            user.email,
+            `Đơn hàng #${order._id.toString()} đang được giao - SmartFood`,
+            emailHtml,
+          ).catch((err) =>
+            console.error("Lỗi gửi email thông báo giao hàng:", err),
+          );
+        }
+      } catch (emailErr) {
+        console.error("Lỗi chuẩn bị email thông báo giao hàng:", emailErr);
+      }
+    }
+  }
+
+  return await getAdminOrderDetail(orderId, session);
+};
+
+/**
+ * Admin cập nhật trạng thái đơn hàng.
+ * Tự động xử lý: hoàn kho, hủy/hoàn payment, khôi phục voucher, tăng soldCount.
+ */
+const updateAdminOrderStatus = async (orderId, newStatus, adminId) => {
+  const session = GET_CLIENT().startSession();
+  try {
+    session.startTransaction();
+    const updatedOrder = await updateAdminOrderStatusInternal(
+      orderId,
+      newStatus,
+      adminId,
+      session,
+    );
+    await session.commitTransaction();
+    return updatedOrder;
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+};
+
+const bulkUpdateAdminOrderStatus = async (
+  orderIds = [],
+  newStatus,
+  adminId,
+) => {
+  const session = GET_CLIENT().startSession();
+  try {
+    const uniqueOrderIds = [
+      ...new Set(orderIds.map((id) => String(id)).filter(Boolean)),
+    ];
+    if (uniqueOrderIds.length === 0) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "Danh sách đơn hàng trống");
+    }
+
+    session.startTransaction();
+
+    const updatedOrders = [];
+    for (const orderId of uniqueOrderIds) {
+      const updatedOrder = await updateAdminOrderStatusInternal(
+        orderId,
+        newStatus,
+        adminId,
+        session,
+      );
+      updatedOrders.push(updatedOrder);
+    }
+
+    await session.commitTransaction();
+    return {
+      success: true,
+      message: `Đã cập nhật trạng thái cho ${updatedOrders.length} đơn hàng`,
+      updatedCount: updatedOrders.length,
+      data: updatedOrders,
+    };
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+};
+
+/**
+ * Lấy danh sách thanh toán cho Admin với phân trang, tìm kiếm, lọc.
+ */
+const getAdminPayments = async ({
+  page = 1,
+  perPage = 10,
+  keyword = "",
+  status = "",
+  paymentMethod = "",
+  sortField = "createdAt",
+  sortOrder = "desc",
+} = {}) => {
+  try {
+    const query = {};
+    if (status && status !== "all") query.status = status;
+    if (paymentMethod && paymentMethod !== "all")
+      query.paymentMethod = paymentMethod;
+
+    const sort = { [sortField]: sortOrder === "asc" ? 1 : -1 };
+    const skip = (page - 1) * perPage;
+
+    const { data, total } = await paymentModel.getAdminPayments({
+      query,
+      keyword,
+      sort,
+      skip,
+      limit: perPage,
+    });
+
+    return {
+      data,
+      pagination: {
+        page: Number(page),
+        perPage: Number(perPage),
+        total,
+        totalPages: Math.ceil(total / perPage),
+      },
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Admin xác nhận đã thu tiền COD → cập nhật payment + đơn hàng sang delivered.
+ * Tái sử dụng getAdminOrderDetail để lấy items cho soldCount.
+ */
+const confirmCodPayment = async (paymentId, adminId) => {
+  const session = GET_CLIENT().startSession();
+  try {
+    session.startTransaction();
+
+    const payment = await paymentModel.findById(paymentId, { session });
+
+    if (!payment) {
+      throw new ApiError(
+        StatusCodes.NOT_FOUND,
+        "Không tìm thấy giao dịch thanh toán",
+      );
+    }
+    if (!["COD", "PayOS"].includes(payment.paymentMethod)) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Chỉ xác nhận được giao dịch COD hoặc PayOS",
+      );
+    }
+    if (payment.status !== "pending") {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Giao dịch đã được xử lý trước đó",
+      );
+    }
+
+    const orderId = payment.orderId.toString();
+
+    // Cập nhật payment → completed
+    await paymentModel.updateStatus(paymentId, "completed", null);
+
+    // Cập nhật đơn hàng → delivered + deliveredAt
+    await orderModel.updateAdminStatus(orderId, "delivered", adminId, {
+      session,
+    });
+
+    // Tăng soldCount — tái sử dụng getAdminOrderDetail
+    const order = await getAdminOrderDetail(orderId, session);
+    const items = (order.items || []).map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+    }));
+    await productModel.increaseSoldCountMany(items, { session });
+
+    await session.commitTransaction();
+    return {
+      success: true,
+      message: `Đã xác nhận thu tiền ${payment.paymentMethod} thành công`,
+    };
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    await session.endSession();
+  }
+};
+
+/**
+ * Thống kê nhanh trạng thái payment cho Admin Dashboard.
+ */
+const getPaymentStats = async () => {
+  try {
+    const stats = await paymentModel.getPaymentStats();
+
+    const result = { pending: 0, completed: 0, cancelled: 0, totalRevenue: 0 };
+    stats.forEach((s) => {
+      result[s._id] = s.count;
+      if (s._id === "completed") result.totalRevenue = s.totalAmount;
+    });
+    return result;
+  } catch (error) {
+    throw error;
+  }
+};
+
 export const orderService = {
+  // ── Client ──────────────────────────────────────────────────
   validateStockBeforeCheckout,
   createNew,
   getOrdersByUserId,
   getOrderDetails,
   cancelOrder,
   confirmReceived,
+  // ── Admin ───────────────────────────────────────────────────
+  getAdminOrders,
+  getAdminOrderDetail,
+  updateAdminOrderStatus,
+  bulkUpdateAdminOrderStatus,
+  getAdminPayments,
+  confirmCodPayment,
+  getPaymentStats,
 };

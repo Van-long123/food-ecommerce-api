@@ -371,3 +371,69 @@ export const getRefundCompletedTemplate = (payload) => {
   `;
 };
 
+export const getOrderShippingTemplate = (orderData) => {
+  const { orderId, customerName, items, totalPay } = orderData;
+
+  const itemsHtml = items
+    .map(
+      (item) => `
+    <tr>
+      <td style="padding: 10px; border-bottom: 1px solid #eee;">${item.title}</td>
+      <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">${formatCurrency(item.price)}</td>
+      <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
+      <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">${formatCurrency(item.totalPrice)}</td>
+    </tr>
+  `
+    )
+    .join('');
+
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden;">
+      <div style="background: linear-gradient(135deg, #f39c12, #e67e22); padding: 20px; text-align: center; color: white;">
+        <h1 style="margin: 0; font-size: 24px;">SmartFood</h1>
+        <p style="margin: 5px 0 0 0; font-size: 16px;">Đơn hàng của bạn đang trên đường giao đến!</p>
+      </div>
+
+      <div style="padding: 20px;">
+        <p style="font-size: 16px; margin-top: 0;">Xin chào <strong>${customerName}</strong>,</p>
+        <p>Tuyệt vời! Đơn hàng <strong>#${orderId}</strong> của bạn đã được giao cho đơn vị vận chuyển và đang trên đường đến tay bạn.</p>
+
+        <div style="margin-bottom: 20px;">
+          <h3 style="font-size: 16px; border-bottom: 2px solid #e67e22; padding-bottom: 5px; color: #e67e22;">Chi tiết đơn hàng đang giao</h3>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <thead>
+              <tr style="background-color: #f5f5f5;">
+                <th style="padding: 10px; text-align: left; border-bottom: 1px solid #ddd;">Tên món</th>
+                <th style="padding: 10px; text-align: right; border-bottom: 1px solid #ddd;">Đơn giá</th>
+                <th style="padding: 10px; text-align: center; border-bottom: 1px solid #ddd;">SL</th>
+                <th style="padding: 10px; text-align: right; border-bottom: 1px solid #ddd;">Thành tiền</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsHtml}
+            </tbody>
+          </table>
+        </div>
+
+        <div style="background-color: #fff3cd; color: #856404; padding: 15px; border-radius: 6px; border: 1px solid #ffeeba; text-align: center; margin-top: 20px;">
+          <p style="margin: 0; font-size: 15px;">Vui lòng chú ý điện thoại để shipper có thể liên lạc giao hàng cho bạn nhé!</p>
+          <p style="margin: 5px 0 0 0; font-size: 15px;">Tổng số tiền cần thanh toán: <strong style="color: #e74c3c; font-size: 16px;">${formatCurrency(totalPay)}</strong> (Nếu đã thanh toán, vui lòng bỏ qua dòng này).</p>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+          <p style="font-size: 14px; color: #666; margin-bottom: 15px;">Bạn có thể theo dõi chi tiết tình trạng đơn hàng tại đây:</p>
+          <a href="${WEBSITE_DOMAIN}/order/${orderId}" 
+             style="display: inline-block; background-color: #e67e22; color: white; padding: 12px 25px; text-decoration: none; font-weight: bold; border-radius: 999px; box-shadow: 0 4px 6px rgba(230, 126, 34, 0.2);">
+            Theo dõi đơn hàng
+          </a>
+        </div>
+        
+      </div>
+      
+      <div style="background-color: #f5f5f5; text-align: center; padding: 20px; font-size: 13px; color: #777;">
+        <p style="margin: 0 0 5px 0;"><strong>SmartFood</strong> - Trải nghiệm ẩm thực tuyệt vời</p>
+        <p style="margin: 0;">Email này được gửi tự động từ hệ thống. Vui lòng không trả lời email này.</p>
+      </div>
+    </div>
+  `;
+};
