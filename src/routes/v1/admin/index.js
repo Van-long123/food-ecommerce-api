@@ -13,11 +13,14 @@ import { adminVoucherRoute } from './voucherRoute'
 import { adminOrderRoute } from './orderRoute'
 import { adminPaymentRoute } from './paymentRoute'
 import { adminDashboardRoute } from './dashboardRoute'
+import { userController } from '~/controllers/userController'
 
 
 const router = express.Router()
 
 router.use(authMiddleware.isAuthorized, authMiddleware.isAdmin)
+
+router.get('/auth/me', userController.getAdminMe)
 
 router.use('/categories', adminCategoryRoute)
 router.use('/products', adminProductRoute)

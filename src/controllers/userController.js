@@ -171,6 +171,16 @@ const verifyOAuth = async (req, res, next) => {
 }
 
 // ADMIN
+const getAdminMe = async (req, res, next) => {
+  try {
+    const userId = req.jwtDecoded._id
+    const result = await userService.getAdminAuthProfile(userId)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
 const getListAdmin = async (req, res, next) => {
   try {
     const result = await userService.getListAdmin(req.query)
@@ -248,6 +258,7 @@ export const userController = {
   setPassword,
   socialAuthCallback,
   verifyOAuth,
+  getAdminMe,
   getListAdmin,
   getDetailAdmin,
   createAdmin,

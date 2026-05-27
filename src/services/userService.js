@@ -1,109 +1,114 @@
-import { StatusCodes } from 'http-status-codes'
-import bcryptjs from 'bcryptjs'
-import { v4 as uuidv4 } from 'uuid'
-import { userModel } from '~/models/userModel'
-import { roleModel } from '~/models/roleModel'
-import ApiError from '~/utils/ApiError'
-import { pickUser } from '~/utils/formatters'
-import { jwtProvider } from '~/providers/jwtProvider'
-import { env } from '~/config/environment'
-import { WEBSITE_DOMAIN } from '~/utils/constants'
-import { sendMail } from '~/utils/sendMail'
-import { CloudinaryProvider } from '~/providers/CloudinaryProvider'
+import { StatusCodes } from "http-status-codes";
+import bcryptjs from "bcryptjs";
+import { v4 as uuidv4 } from "uuid";
+import { userModel } from "~/models/userModel";
+import { roleModel } from "~/models/roleModel";
+import ApiError from "~/utils/ApiError";
+import { pickUser } from "~/utils/formatters";
+import { jwtProvider } from "~/providers/jwtProvider";
+import { env } from "~/config/environment";
+import { WEBSITE_DOMAIN } from "~/utils/constants";
+import { sendMail } from "~/utils/sendMail";
+import { CloudinaryProvider } from "~/providers/CloudinaryProvider";
 
-const RESET_PASSWORD_TOKEN_LIFE = 1000 * 60 * 15
-const ADMIN_RESET_PASSWORD_TOKEN_LIFE = 1000 * 60 * 60 * 24
+const RESET_PASSWORD_TOKEN_LIFE = 1000 * 60 * 15;
+const ADMIN_RESET_PASSWORD_TOKEN_LIFE = 1000 * 60 * 60 * 24;
 
 /**
  * Lấy danh sách ID của các vai trò hệ thống (System Roles) từ biến môi trường.
  * Các ID này đại diện cho những quyền quản trị tối cao không thể xóa sửa. */
 const getSystemRoleIds = () => {
-  const raw = String(env.SYSTEM_ROLE_IDS || '')
+  const raw = String(env.SYSTEM_ROLE_IDS || "");
   return raw
-    .split(',')
+    .split(",")
     .map((id) => id.trim())
-    .filter(Boolean)
-}
+    .filter(Boolean);
+};
 
 /**
  * Phân giải và xác định loại tài khoản (role string: 'admin' hoặc 'client') dựa trên dữ liệu đầu vào.
  * Ưu tiên lấy trực tiếp trường 'role' nếu có. Nếu không, dựa vào 'roleId' để kiểm tra xem
  * vai trò đó có thuộc System Roles hoặc được đánh dấu 'isSystem' trong DB hay không. */
 const resolveUserRole = async (payload = {}) => {
-  if (payload.role && ['admin', 'client'].includes(payload.role)) {
-    return payload.role
+  if (payload.role && ["admin", "client"].includes(payload.role)) {
+    return payload.role;
   }
 
   if (payload.roleId) {
-    const systemRoleIds = getSystemRoleIds()
+    const systemRoleIds = getSystemRoleIds();
     if (systemRoleIds.includes(String(payload.roleId))) {
-      return userModel.USER_ROLES.ADMIN
+      return userModel.USER_ROLES.ADMIN;
     }
 
-    const role = await roleModel.findOneById(payload.roleId)
-    if (role?.isSystem) return userModel.USER_ROLES.ADMIN
+    const role = await roleModel.findOneById(payload.roleId);
+    if (role?.isSystem) return userModel.USER_ROLES.ADMIN;
   }
 
-  return userModel.USER_ROLES.CLIENT
-}
+  return userModel.USER_ROLES.CLIENT;
+};
 
 /**
  * Loại bỏ các trường dữ liệu nhạy cảm (mật khẩu, token) ra khỏi object user
  * trước khi trả dữ liệu về cho Frontend, đảm bảo bảo mật thông tin người dùng. */
 const sanitizeUser = (user) => {
-  if (!user) return null
-  const cloned = { ...user }
-  delete cloned.password
-  delete cloned.verifyToken
-  delete cloned.resetPasswordToken
-  delete cloned.resetPasswordExpiresAt
-  delete cloned.socialAccounts
-  return cloned
-}
+  if (!user) return null;
+  const cloned = { ...user };
+  delete cloned.password;
+  delete cloned.verifyToken;
+  delete cloned.resetPasswordToken;
+  delete cloned.resetPasswordExpiresAt;
+  delete cloned.socialAccounts;
+  return cloned;
+};
 
 const SELF_PROFILE_FORBIDDEN_FIELDS = [
-  '_id',
-  'email',
-  'password',
-  'role',
-  'roleId',
-  'isActive',
-  'provider',
-  'socialAccounts',
-  'verifyToken',
-  'resetPasswordToken',
-  'resetPasswordExpiresAt',
-  'deleted',
-  'deletedAt',
-  'createdAt',
-  'createdBy',
-  'deletedBy',
-  'updatedBy'
-]
+  "_id",
+  "email",
+  "password",
+  "role",
+  "roleId",
+  "isActive",
+  "provider",
+  "socialAccounts",
+  "verifyToken",
+  "resetPasswordToken",
+  "resetPasswordExpiresAt",
+  "deleted",
+  "deletedAt",
+  "createdAt",
+  "createdBy",
+  "deletedBy",
+  "updatedBy",
+];
 
 const stripForbiddenSelfProfileFields = (payload = {}) => {
-  const cloned = { ...payload }
+  const cloned = { ...payload };
   SELF_PROFILE_FORBIDDEN_FIELDS.forEach((field) => {
-    delete cloned[field]
-  })
-  return cloned
-}
+    delete cloned[field];
+  });
+  return cloned;
+};
 
 const normalizeSelfProfilePayload = (payload = {}) => {
-  const updateData = stripForbiddenSelfProfileFields(payload)
+  const updateData = stripForbiddenSelfProfileFields(payload);
 
-  if (typeof updateData.displayName === 'string') updateData.displayName = updateData.displayName.trim()
-  if (typeof updateData.phone === 'string') updateData.phone = updateData.phone.trim()
-  if (typeof updateData.address === 'string') updateData.address = updateData.address.trim()
-  if (typeof updateData.gender === 'string') updateData.gender = updateData.gender.trim()
-  if (typeof updateData.birthday === 'string') updateData.birthday = updateData.birthday.trim()
+  if (typeof updateData.displayName === "string")
+    updateData.displayName = updateData.displayName.trim();
+  if (typeof updateData.phone === "string")
+    updateData.phone = updateData.phone.trim();
+  if (typeof updateData.address === "string")
+    updateData.address = updateData.address.trim();
+  if (typeof updateData.gender === "string")
+    updateData.gender = updateData.gender.trim();
+  if (typeof updateData.birthday === "string")
+    updateData.birthday = updateData.birthday.trim();
 
-  return updateData
-}
+  return updateData;
+};
 
 const buildWelcomeEmail = (token) => {
-  const setPasswordLink = `${WEBSITE_DOMAIN}/auth/set-password?token=${encodeURIComponent(token)}`
-  const subject = 'SmartFood: Kich hoat tai khoan va dat mat khau'
+  const setPasswordLink = `${WEBSITE_DOMAIN}/auth/set-password?token=${encodeURIComponent(token)}`;
+  const subject = "SmartFood: Kich hoat tai khoan va dat mat khau";
   const html = `
 <!DOCTYPE html>
 <html lang="vi">
@@ -197,31 +202,33 @@ const buildWelcomeEmail = (token) => {
   </table>
 </body>
 </html>
-`
+`;
 
-  return { subject, html }
-}
+  return { subject, html };
+};
 
 const createNew = async (reqBody) => {
   try {
-    const existUser = await userModel.findOneByEmail(reqBody.email)
-    if (existUser) throw new ApiError(StatusCodes.CONFLICT, 'Email đã tồn tại!')
+    const existUser = await userModel.findOneByEmail(reqBody.email);
+    if (existUser)
+      throw new ApiError(StatusCodes.CONFLICT, "Email đã tồn tại!");
 
-    const nameFromEmail = reqBody.email.split('@')[0]
+    const nameFromEmail = reqBody.email.split("@")[0];
     const newUser = {
       email: reqBody.email,
       password: bcryptjs.hashSync(reqBody.password, 8),
       username: nameFromEmail,
       displayName: reqBody.displayName || nameFromEmail,
       phone: reqBody.phone,
-      verifyToken: uuidv4()
-    }
+      verifyToken: uuidv4(),
+    };
 
-    const createdUser = await userModel.createNew(newUser)
-    const getNewUser = await userModel.findOneById(createdUser.insertedId)
+    const createdUser = await userModel.createNew(newUser);
+    const getNewUser = await userModel.findOneById(createdUser.insertedId);
 
-    const verificationLink = `${WEBSITE_DOMAIN}/account/verification?email=${getNewUser.email}&token=${getNewUser.verifyToken}`
-    const customSubject = 'SmartFood: Vui lòng xác thực email trước khi sử dụng dịch vụ'
+    const verificationLink = `${WEBSITE_DOMAIN}/account/verification?email=${getNewUser.email}&token=${getNewUser.verifyToken}`;
+    const customSubject =
+      "SmartFood: Vui lòng xác thực email trước khi sử dụng dịch vụ";
     const htmlContent = `
 <!DOCTYPE html>
 <html lang="vi">
@@ -525,119 +532,141 @@ const createNew = async (reqBody) => {
 
 </body>
 </html>
-`
+`;
 
-    await sendMail(getNewUser.email, customSubject, htmlContent)
+    await sendMail(getNewUser.email, customSubject, htmlContent);
 
-    return pickUser(getNewUser)
+    return pickUser(getNewUser);
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 const verifyAccount = async (reqBody) => {
   try {
-    const existUser = await userModel.findOneByEmail(reqBody.email)
-    if (!existUser) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản!')
-    if (existUser.isActive) throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Tài khoản đã được kích hoạt!')
-    if (existUser.verifyToken !== reqBody.token) throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Mã xác thực không hợp lệ!')
+    const existUser = await userModel.findOneByEmail(reqBody.email);
+    if (!existUser)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy tài khoản!");
+    if (existUser.isActive)
+      throw new ApiError(
+        StatusCodes.NOT_ACCEPTABLE,
+        "Tài khoản đã được kích hoạt!",
+      );
+    if (existUser.verifyToken !== reqBody.token)
+      throw new ApiError(
+        StatusCodes.NOT_ACCEPTABLE,
+        "Mã xác thực không hợp lệ!",
+      );
 
     const updateData = {
       isActive: true,
       verifyToken: null,
-      updatedAt: Date.now()
-    }
+      updatedAt: Date.now(),
+    };
 
-    const updatedUser = await userModel.update(existUser._id, updateData)
-    return pickUser(updatedUser)
+    const updatedUser = await userModel.update(existUser._id, updateData);
+    return pickUser(updatedUser);
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 const login = async (reqBody) => {
   try {
-    const existUser = await userModel.findOneByEmail(reqBody.email)
+    const existUser = await userModel.findOneByEmail(reqBody.email);
 
-    if (!existUser) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản!')
-    if (!existUser.isActive) throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Tài khoản chưa được kích hoạt!')
+    if (!existUser)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy tài khoản!");
+    if (!existUser.isActive)
+      throw new ApiError(
+        StatusCodes.NOT_ACCEPTABLE,
+        "Tài khoản chưa được kích hoạt!",
+      );
 
     // Kiểm tra nếu tài khoản chưa có mật khẩu (đăng ký qua Social)
     if (!existUser.password) {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
-        `Tài khoản đã liên kết với ${existUser.provider}. Vui lòng đăng nhập bằng ${existUser.provider} hoặc dùng “Quên mật khẩu”.`
-      )
+        `Tài khoản đã liên kết với ${existUser.provider}. Vui lòng đăng nhập bằng ${existUser.provider} hoặc dùng “Quên mật khẩu”.`,
+      );
     }
 
     if (!bcryptjs.compareSync(reqBody.password, existUser.password)) {
-      throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Email hoặc mật khẩu không đúng!')
+      throw new ApiError(
+        StatusCodes.NOT_ACCEPTABLE,
+        "Email hoặc mật khẩu không đúng!",
+      );
     }
 
     const userInfo = {
       _id: existUser._id.toString(),
-      email: existUser.email
-    }
+      email: existUser.email,
+    };
 
     const accessToken = await jwtProvider.generateToken(
       userInfo,
       env.ACCESS_TOKEN_PRIVATE_KEY,
       // env.ACCESS_TOKEN_LIFE
-      '10s'
-    )
+      "10s",
+    );
 
     const refreshToken = await jwtProvider.generateToken(
       userInfo,
       env.REFRESH_TOKEN_PRIVATE_KEY,
       // env.REFRESH_TOKEN_LIFE
-      '20s'
-    )
+      "20s",
+    );
 
-    return { accessToken, refreshToken, ...pickUser(existUser) }
+    return { accessToken, refreshToken, ...pickUser(existUser) };
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 const refreshToken = async (clientRefreshToken) => {
   try {
-    if (!clientRefreshToken) throw new ApiError(StatusCodes.UNAUTHORIZED, 'Thiếu refresh token!')
+    if (!clientRefreshToken)
+      throw new ApiError(StatusCodes.UNAUTHORIZED, "Thiếu refresh token!");
 
-    const refreshTokenDecoded = await jwtProvider.verifyToken(clientRefreshToken, env.REFRESH_TOKEN_PRIVATE_KEY)
+    const refreshTokenDecoded = await jwtProvider.verifyToken(
+      clientRefreshToken,
+      env.REFRESH_TOKEN_PRIVATE_KEY,
+    );
 
     const userInfo = {
       _id: refreshTokenDecoded._id,
-      email: refreshTokenDecoded.email
-    }
+      email: refreshTokenDecoded.email,
+    };
 
     const accessToken = await jwtProvider.generateToken(
       userInfo,
       env.ACCESS_TOKEN_PRIVATE_KEY,
-      env.ACCESS_TOKEN_LIFE
-    )
+      env.ACCESS_TOKEN_LIFE,
+    );
 
-    return { accessToken }
+    return { accessToken };
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 const forgotPassword = async (reqBody) => {
   try {
-    const existUser = await userModel.findOneByEmail(reqBody.email)
-    if (!existUser) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản!')
+    const existUser = await userModel.findOneByEmail(reqBody.email);
+    if (!existUser)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy tài khoản!");
 
-    const resetPasswordToken = uuidv4()
-    const resetPasswordExpiresAt = Date.now() + RESET_PASSWORD_TOKEN_LIFE
+    const resetPasswordToken = uuidv4();
+    const resetPasswordExpiresAt = Date.now() + RESET_PASSWORD_TOKEN_LIFE;
 
     await userModel.update(existUser._id, {
       resetPasswordToken,
       resetPasswordExpiresAt,
-      updatedAt: Date.now()
-    })
+      updatedAt: Date.now(),
+    });
 
-    const resetLink = `${WEBSITE_DOMAIN}/auth/change-password?email=${encodeURIComponent(existUser.email)}&token=${resetPasswordToken}`
-    const customSubject = 'SmartFood: Đặt lại mật khẩu'
+    const resetLink = `${WEBSITE_DOMAIN}/auth/change-password?email=${encodeURIComponent(existUser.email)}&token=${resetPasswordToken}`;
+    const customSubject = "SmartFood: Đặt lại mật khẩu";
     const htmlContent = `
 <!DOCTYPE html>
 <html lang="vi">
@@ -852,54 +881,77 @@ const forgotPassword = async (reqBody) => {
 
 </body>
 </html>
-`
+`;
 
-    await sendMail(existUser.email, customSubject, htmlContent)
+    await sendMail(existUser.email, customSubject, htmlContent);
 
-    return { sent: true }
+    return { sent: true };
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 const resetPassword = async (reqBody) => {
   try {
-    const existUser = await userModel.findOneByEmail(reqBody.email)
-    if (!existUser) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản!')
+    const existUser = await userModel.findOneByEmail(reqBody.email);
+    if (!existUser)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy tài khoản!");
 
-    if (!existUser.resetPasswordToken || existUser.resetPasswordToken !== reqBody.token) {
-      throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Mã đặt lại mật khẩu không hợp lệ!')
+    if (
+      !existUser.resetPasswordToken ||
+      existUser.resetPasswordToken !== reqBody.token
+    ) {
+      throw new ApiError(
+        StatusCodes.NOT_ACCEPTABLE,
+        "Mã đặt lại mật khẩu không hợp lệ!",
+      );
     }
 
-    if (!existUser.resetPasswordExpiresAt || Number(existUser.resetPasswordExpiresAt) < Date.now()) {
-      throw new ApiError(StatusCodes.GONE, 'Mã đặt lại mật khẩu đã hết hạn!')
+    if (
+      !existUser.resetPasswordExpiresAt ||
+      Number(existUser.resetPasswordExpiresAt) < Date.now()
+    ) {
+      throw new ApiError(StatusCodes.GONE, "Mã đặt lại mật khẩu đã hết hạn!");
     }
 
     await userModel.update(existUser._id, {
       password: bcryptjs.hashSync(reqBody.newPassword, 8),
       resetPasswordToken: null,
       resetPasswordExpiresAt: null,
-      updatedAt: Date.now()
-    })
+      updatedAt: Date.now(),
+    });
 
-    return { reset: true }
+    return { reset: true };
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 const setPassword = async (reqBody) => {
   try {
-    const existUser = await userModel.findOneByResetPasswordToken(reqBody.token)
-    if (!existUser) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản!')
-    if (existUser.deleted) throw new ApiError(StatusCodes.FORBIDDEN, 'Tài khoản đã bị xóa!')
+    const existUser = await userModel.findOneByResetPasswordToken(
+      reqBody.token,
+    );
+    if (!existUser)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy tài khoản!");
+    if (existUser.deleted)
+      throw new ApiError(StatusCodes.FORBIDDEN, "Tài khoản đã bị xóa!");
 
-    if (!existUser.resetPasswordToken || existUser.resetPasswordToken !== reqBody.token) {
-      throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Mã kích hoạt không hợp lệ!')
+    if (
+      !existUser.resetPasswordToken ||
+      existUser.resetPasswordToken !== reqBody.token
+    ) {
+      throw new ApiError(
+        StatusCodes.NOT_ACCEPTABLE,
+        "Mã kích hoạt không hợp lệ!",
+      );
     }
 
-    if (!existUser.resetPasswordExpiresAt || Number(existUser.resetPasswordExpiresAt) < Date.now()) {
-      throw new ApiError(StatusCodes.GONE, 'Mã kích hoạt đã hết hạn!')
+    if (
+      !existUser.resetPasswordExpiresAt ||
+      Number(existUser.resetPasswordExpiresAt) < Date.now()
+    ) {
+      throw new ApiError(StatusCodes.GONE, "Mã kích hoạt đã hết hạn!");
     }
 
     await userModel.update(existUser._id, {
@@ -908,171 +960,234 @@ const setPassword = async (reqBody) => {
       verifyToken: null,
       resetPasswordToken: null,
       resetPasswordExpiresAt: null,
-      updatedAt: Date.now()
-    })
+      updatedAt: Date.now(),
+    });
 
-    return { set: true }
+    return { set: true };
   } catch (error) {
-    throw error
+    throw error;
   }
-}
-
+};
 
 const update = async (userId, reqBody, file) => {
   try {
-    const existUser = await userModel.findOneById(userId)
-    if (!existUser) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản!')
-    if (!existUser.isActive) throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Tài khoản chưa được kích hoạt!')
+    const existUser = await userModel.findOneById(userId);
+    if (!existUser)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy tài khoản!");
+    if (!existUser.isActive)
+      throw new ApiError(
+        StatusCodes.NOT_ACCEPTABLE,
+        "Tài khoản chưa được kích hoạt!",
+      );
 
-    let updatedUser = {}
+    let updatedUser = {};
 
     if (reqBody.current_password && reqBody.new_password) {
       // Nếu tài khoản social chưa có mật khẩu, không thể dùng current_password để check
       if (!existUser.password) {
-        throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Tài khoản của bạn chưa thiết lập mật khẩu. Vui lòng sử dụng chức năng "Quên mật khẩu" để tạo mật khẩu lần đầu.')
+        throw new ApiError(
+          StatusCodes.NOT_ACCEPTABLE,
+          'Tài khoản của bạn chưa thiết lập mật khẩu. Vui lòng sử dụng chức năng "Quên mật khẩu" để tạo mật khẩu lần đầu.',
+        );
       }
 
       if (!bcryptjs.compareSync(reqBody.current_password, existUser.password)) {
-        throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Mật khẩu hiện tại không đúng!')
+        throw new ApiError(
+          StatusCodes.NOT_ACCEPTABLE,
+          "Mật khẩu hiện tại không đúng!",
+        );
       }
 
       updatedUser = await userModel.update(existUser._id, {
         password: bcryptjs.hashSync(reqBody.new_password, 8),
-        updatedAt: Date.now()
-      })
+        updatedAt: Date.now(),
+      });
     } else {
       const updateData = {
         ...reqBody,
-        updatedAt: Date.now()
-      }
-      delete updateData.current_password
-      delete updateData.new_password
+        updatedAt: Date.now(),
+      };
+      delete updateData.current_password;
+      delete updateData.new_password;
 
       if (file) {
-        const uploadResult = await CloudinaryProvider.streamUpload(file.buffer, 'smartfood-users', file.mimetype)
-        updateData.avatar = uploadResult.secure_url
+        const uploadResult = await CloudinaryProvider.streamUpload(
+          file.buffer,
+          "smartfood-users",
+          file.mimetype,
+        );
+        updateData.avatar = uploadResult.secure_url;
       }
 
-      updatedUser = await userModel.update(existUser._id, updateData)
+      updatedUser = await userModel.update(existUser._id, updateData);
     }
 
-    return pickUser(updatedUser)
+    return pickUser(updatedUser);
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 // Social Auth — Callback sau khi OAuth provider xác thực thành công
 // socialProfile: { socialId, provider, email, displayName, avatar }
 const socialAuthCallback = async (socialProfile) => {
   try {
-    const { socialId, provider, email, displayName, avatar } = socialProfile
+    const { socialId, provider, email, displayName, avatar } = socialProfile;
 
     if (!socialId || !provider) {
-      throw new ApiError(StatusCodes.BAD_REQUEST, 'Thông tin xác thực xã hội không hợp lệ!')
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Thông tin xác thực xã hội không hợp lệ!",
+      );
     }
 
     // Upsert: tìm hoặc tạo mới user từ social profile
-    const user = await userModel.upsertSocialUser({ email, displayName, avatar, provider, socialId })
+    const user = await userModel.upsertSocialUser({
+      email,
+      displayName,
+      avatar,
+      provider,
+      socialId,
+    });
 
     if (!user) {
-      throw new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, 'Không thể xử lý tài khoản xã hội!')
+      throw new ApiError(
+        StatusCodes.INTERNAL_SERVER_ERROR,
+        "Không thể xử lý tài khoản xã hội!",
+      );
     }
 
     const userInfo = {
       _id: user._id.toString(),
-      email: user.email
-    }
+      email: user.email,
+    };
 
     const accessToken = await jwtProvider.generateToken(
       userInfo,
       env.ACCESS_TOKEN_PRIVATE_KEY,
-      env.ACCESS_TOKEN_LIFE || '1d'
-    )
+      env.ACCESS_TOKEN_LIFE || "1d",
+    );
 
     const refreshToken = await jwtProvider.generateToken(
       userInfo,
       env.REFRESH_TOKEN_PRIVATE_KEY,
-      env.REFRESH_TOKEN_LIFE || '14d'
-    )
+      env.REFRESH_TOKEN_LIFE || "14d",
+    );
 
     return {
       _id: user._id.toString(),
       accessToken,
       refreshToken,
-      ...pickUser(user)
-    }
+      ...pickUser(user),
+    };
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 // // Verify OAuth — FE gọi sau khi landing trên trang login-success
 // để xác nhận user đã được tạo/đăng nhập thành công
 const verifyOAuth = async (reqBody) => {
   try {
-    const { userId } = reqBody
+    const { userId } = reqBody;
 
-    if (!userId) throw new ApiError(StatusCodes.BAD_REQUEST, 'Thiếu userId!')
+    if (!userId) throw new ApiError(StatusCodes.BAD_REQUEST, "Thiếu userId!");
 
-    const user = await userModel.findOneById(userId)
-    if (!user) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản!')
-    if (user.deleted) throw new ApiError(StatusCodes.FORBIDDEN, 'Tài khoản đã bị xóa!')
+    const user = await userModel.findOneById(userId);
+    if (!user)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy tài khoản!");
+    if (user.deleted)
+      throw new ApiError(StatusCodes.FORBIDDEN, "Tài khoản đã bị xóa!");
 
-    return pickUser(user)
+    return pickUser(user);
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 // ADMIN
 
+const getAdminAuthProfile = async (userId) => {
+  try {
+    const user = await userModel.findOneById(userId);
+    if (!user || user.deleted) {
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy tài khoản!");
+    }
+
+    if (user.role !== userModel.USER_ROLES.ADMIN) {
+      throw new ApiError(StatusCodes.FORBIDDEN, "Bạn không có quyền truy cập!");
+    }
+
+    let permissions = [];
+    let isSystem = false;
+
+    if (user.roleId) {
+      const role = await roleModel.findOneById(String(user.roleId));
+      permissions = role?.permissions || [];
+      const systemRoleIds = getSystemRoleIds();
+      const roleIdStr = String(role?._id || user.roleId);
+      isSystem = Boolean(role?.isSystem) || systemRoleIds.includes(roleIdStr);
+    }
+
+    return {
+      ...pickUser(user),
+      roleId: user.roleId ? String(user.roleId) : null,
+      permissions,
+      isSystem,
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
 const getListAdmin = async (query) => {
   try {
-    const page = parseInt(query.page) || 1
-    const limit = parseInt(query.limit) || 10
-    const sortField = query.sortField || 'createdAt'
-    const sortOrder = query.sortOrder === 'asc' ? 1 : -1
+    const page = parseInt(query.page) || 1;
+    const limit = parseInt(query.limit) || 10;
+    const sortField = query.sortField || "createdAt";
+    const sortOrder = query.sortOrder === "asc" ? 1 : -1;
 
     const allowedSortFields = [
-      'displayName',
-      'email',
-      'phone',
-      'role',
-      'isActive',
-      'createdAt',
-      'updatedAt'
-    ]
-    const safeSortField = allowedSortFields.includes(sortField) ? sortField : 'createdAt'
+      "displayName",
+      "email",
+      "phone",
+      "role",
+      "isActive",
+      "createdAt",
+      "updatedAt",
+    ];
+    const safeSortField = allowedSortFields.includes(sortField)
+      ? sortField
+      : "createdAt";
 
-    const queryConditions = [{ deleted: false }]
+    const queryConditions = [{ deleted: false }];
 
     if (query.keyword) {
-      const regex = new RegExp(query.keyword, 'i')
+      const regex = new RegExp(query.keyword, "i");
       queryConditions.push({
         $or: [
           { displayName: { $regex: regex } },
           { email: { $regex: regex } },
-          { phone: { $regex: regex } }
-        ]
-      })
+          { phone: { $regex: regex } },
+        ],
+      });
     }
 
     if (query.role) {
-      queryConditions.push({ role: query.role })
+      queryConditions.push({ role: query.role });
     }
 
     if (query.status) {
-      const isActive = query.status === 'active'
-      queryConditions.push({ isActive })
+      const isActive = query.status === "active";
+      queryConditions.push({ isActive });
     }
 
     const { data, total } = await userModel.getList({
       queryConditions,
       page,
       limit,
-      sort: { [safeSortField]: sortOrder }
-    })
+      sort: { [safeSortField]: sortOrder },
+    });
 
     return {
       data,
@@ -1080,119 +1195,146 @@ const getListAdmin = async (query) => {
         page,
         limit,
         total,
-        totalPages: Math.ceil(total / limit)
-      }
-    }
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 const getDetailAdmin = async (id) => {
   try {
-    const user = await userModel.findOneById(id)
+    const user = await userModel.findOneById(id);
     if (!user || user.deleted) {
-      throw new ApiError(StatusCodes.NOT_FOUND, 'Khong tim thay nguoi dung!')
+      throw new ApiError(StatusCodes.NOT_FOUND, "Khong tim thay nguoi dung!");
     }
-    return sanitizeUser(user)
+    return sanitizeUser(user);
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 const updateSelfProfile = async (userId, reqBody, file) => {
   try {
-    const existUser = await userModel.findOneById(userId)
-    if (!existUser) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản!')
-    if (!existUser.isActive) throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Tài khoản chưa được kích hoạt!')
+    const existUser = await userModel.findOneById(userId);
+    if (!existUser)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy tài khoản!");
+    if (!existUser.isActive)
+      throw new ApiError(
+        StatusCodes.NOT_ACCEPTABLE,
+        "Tài khoản chưa được kích hoạt!",
+      );
 
-    const updateData = normalizeSelfProfilePayload(reqBody)
+    const updateData = normalizeSelfProfilePayload(reqBody);
 
     if (file) {
-      const uploadResult = await CloudinaryProvider.streamUpload(file.buffer, 'smartfood-users', file.mimetype)
-      updateData.avatar = uploadResult.secure_url
+      const uploadResult = await CloudinaryProvider.streamUpload(
+        file.buffer,
+        "smartfood-users",
+        file.mimetype,
+      );
+      updateData.avatar = uploadResult.secure_url;
     } else if (updateData.avatar === undefined) {
-      delete updateData.avatar
+      delete updateData.avatar;
     }
 
     const updatedUser = await userModel.update(existUser._id, {
       ...updateData,
-      updatedAt: Date.now()
-    })
+      updatedAt: Date.now(),
+    });
 
-    return pickUser(updatedUser)
+    return pickUser(updatedUser);
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 const changePassword = async (userId, reqBody) => {
   try {
-    const existUser = await userModel.findOneById(userId)
-    if (!existUser) throw new ApiError(StatusCodes.NOT_FOUND, 'Không tìm thấy tài khoản!')
-    if (!existUser.isActive) throw new ApiError(StatusCodes.NOT_ACCEPTABLE, 'Tài khoản chưa được kích hoạt!')
+    const existUser = await userModel.findOneById(userId);
+    if (!existUser)
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy tài khoản!");
+    if (!existUser.isActive)
+      throw new ApiError(
+        StatusCodes.NOT_ACCEPTABLE,
+        "Tài khoản chưa được kích hoạt!",
+      );
 
     if (!existUser.password) {
       throw new ApiError(
         StatusCodes.NOT_ACCEPTABLE,
-        'Tài khoản của bạn chưa thiết lập mật khẩu. Vui lòng sử dụng chức năng "Quên mật khẩu" để tạo mật khẩu lần đầu.'
-      )
+        'Tài khoản của bạn chưa thiết lập mật khẩu. Vui lòng sử dụng chức năng "Quên mật khẩu" để tạo mật khẩu lần đầu.',
+      );
     }
 
-    const isOldPasswordValid = await bcryptjs.compare(reqBody.oldPassword, existUser.password)
+    const isOldPasswordValid = await bcryptjs.compare(
+      reqBody.oldPassword,
+      existUser.password,
+    );
     if (!isOldPasswordValid) {
-      throw new ApiError(StatusCodes.BAD_REQUEST, 'Mật khẩu hiện tại không đúng!')
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Mật khẩu hiện tại không đúng!",
+      );
     }
 
-    const hashedPassword = await bcryptjs.hash(reqBody.newPassword, 8)
+    const hashedPassword = await bcryptjs.hash(reqBody.newPassword, 8);
     await userModel.update(existUser._id, {
       password: hashedPassword,
       resetPasswordToken: null,
       resetPasswordExpiresAt: null,
-      updatedAt: Date.now()
-    })
+      updatedAt: Date.now(),
+    });
 
-    return { message: 'Đổi mật khẩu thành công!' }
+    return { message: "Đổi mật khẩu thành công!" };
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 const createAdmin = async (reqBody, actorId, file) => {
   try {
-    const existUser = await userModel.findOneByEmail(reqBody.email)
+    const existUser = await userModel.findOneByEmail(reqBody.email);
     if (existUser) {
-      throw new ApiError(StatusCodes.CONFLICT, 'Email da ton tai!')
+      throw new ApiError(StatusCodes.CONFLICT, "Email da ton tai!");
     }
 
-    const actor = await userModel.findOneById(actorId)
+    const actor = await userModel.findOneById(actorId);
     if (!actor) {
-      throw new ApiError(StatusCodes.NOT_FOUND, 'Khong tim thay tai khoan thuc hien!')
+      throw new ApiError(
+        StatusCodes.NOT_FOUND,
+        "Khong tim thay tai khoan thuc hien!",
+      );
     }
 
-    const role = await resolveUserRole(reqBody)
-    const resetPasswordToken = uuidv4()
-    const resetPasswordExpiresAt = Date.now() + ADMIN_RESET_PASSWORD_TOKEN_LIFE
+    const role = await resolveUserRole(reqBody);
+    const resetPasswordToken = uuidv4();
+    const resetPasswordExpiresAt = Date.now() + ADMIN_RESET_PASSWORD_TOKEN_LIFE;
 
-    let avatar = reqBody.avatar || null
+    let avatar = reqBody.avatar || null;
     if (file) {
-      const uploadResult = await CloudinaryProvider.streamUpload(file.buffer, 'smartfood-users', file.mimetype)
-      avatar = uploadResult.secure_url
+      const uploadResult = await CloudinaryProvider.streamUpload(
+        file.buffer,
+        "smartfood-users",
+        file.mimetype,
+      );
+      avatar = uploadResult.secure_url;
     }
 
-    const nameFromEmail = reqBody.email.split('@')[0]
+    const nameFromEmail = reqBody.email.split("@")[0];
     const newUser = {
       email: reqBody.email,
       password: null,
       username: nameFromEmail,
       displayName: reqBody.displayName || nameFromEmail,
-      phone: reqBody.phone || '',
+      phone: reqBody.phone || "",
       avatar,
       role,
       roleId: reqBody.roleId || null,
-      address: reqBody.address || '',
-      gender: reqBody.gender || '',
-      birthday: reqBody.birthday || '',
+      address: reqBody.address || "",
+      gender: reqBody.gender || "",
+      birthday: reqBody.birthday || "",
       isActive: false,
       verifyToken: null,
       resetPasswordToken,
@@ -1202,26 +1344,26 @@ const createAdmin = async (reqBody, actorId, file) => {
       createdBy: { account_id: actorId, email: actor.email },
       createdAt: new Date(),
       // updatedAt: null,
-      deleted: false
-    }
+      deleted: false,
+    };
 
-    const created = await userModel.createNew(newUser)
-    const createdUser = await userModel.findOneById(created.insertedId)
+    const created = await userModel.createNew(newUser);
+    const createdUser = await userModel.findOneById(created.insertedId);
 
-    const { subject, html } = buildWelcomeEmail(resetPasswordToken)
-    await sendMail(reqBody.email, subject, html)
+    const { subject, html } = buildWelcomeEmail(resetPasswordToken);
+    await sendMail(reqBody.email, subject, html);
 
-    return sanitizeUser(createdUser)
+    return sanitizeUser(createdUser);
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 const updateAdmin = async (id, reqBody, actorId, file) => {
   try {
-    const user = await userModel.findOneById(id)
+    const user = await userModel.findOneById(id);
     if (!user || user.deleted) {
-      throw new ApiError(StatusCodes.NOT_FOUND, 'Khong tim thay nguoi dung!')
+      throw new ApiError(StatusCodes.NOT_FOUND, "Khong tim thay nguoi dung!");
     }
 
     const updateData = {
@@ -1230,91 +1372,108 @@ const updateAdmin = async (id, reqBody, actorId, file) => {
       roleId: reqBody.roleId,
       address: reqBody.address,
       gender: reqBody.gender,
-      birthday: reqBody.birthday
-    }
+      birthday: reqBody.birthday,
+    };
 
     if (reqBody.isActive !== undefined) {
-      updateData.isActive = reqBody.isActive === true || reqBody.isActive === 'true'
+      updateData.isActive =
+        reqBody.isActive === true || reqBody.isActive === "true";
     }
 
     if (reqBody.role) {
-      updateData.role = reqBody.role
+      updateData.role = reqBody.role;
     } else if (reqBody.roleId !== undefined) {
-      updateData.role = await resolveUserRole(reqBody)
+      updateData.role = await resolveUserRole(reqBody);
     }
 
     if (file) {
-      const uploadResult = await CloudinaryProvider.streamUpload(file.buffer, 'smartfood-users', file.mimetype)
-      updateData.avatar = uploadResult.secure_url
+      const uploadResult = await CloudinaryProvider.streamUpload(
+        file.buffer,
+        "smartfood-users",
+        file.mimetype,
+      );
+      updateData.avatar = uploadResult.secure_url;
     } else if (reqBody.avatar !== undefined) {
-      updateData.avatar = reqBody.avatar
+      updateData.avatar = reqBody.avatar;
     }
 
-    const updated = await userModel.update(id, updateData)
-    return sanitizeUser(updated)
+    const updated = await userModel.update(id, updateData);
+    return sanitizeUser(updated);
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 const softDeleteAdmin = async (id, actorId) => {
   try {
-    const user = await userModel.findOneById(id)
+    const user = await userModel.findOneById(id);
     if (!user || user.deleted) {
-      throw new ApiError(StatusCodes.NOT_FOUND, 'Khong tim thay nguoi dung!')
+      throw new ApiError(StatusCodes.NOT_FOUND, "Khong tim thay nguoi dung!");
     }
 
-    const actor = await userModel.findOneById(actorId)
+    const actor = await userModel.findOneById(actorId);
     if (!actor) {
-      throw new ApiError(StatusCodes.NOT_FOUND, 'Khong tim thay tai khoan thuc hien!')
+      throw new ApiError(
+        StatusCodes.NOT_FOUND,
+        "Khong tim thay tai khoan thuc hien!",
+      );
     }
 
     const result = await userModel.softDelete(id, {
       account_id: actorId,
-      email: actor.email
-    })
+      email: actor.email,
+    });
 
-    return sanitizeUser(result)
+    return sanitizeUser(result);
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 const bulkUpdateStatusAdmin = async ({ user_ids = [], isActive }) => {
   try {
     if (!Array.isArray(user_ids) || user_ids.length === 0) {
-      throw new ApiError(StatusCodes.BAD_REQUEST, 'Danh sach nguoi dung khong hop le!')
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Danh sach nguoi dung khong hop le!",
+      );
     }
 
-    const status = isActive === true || isActive === 'true'
-    const result = await userModel.updateManyStatus(user_ids, status)
-    return { updatedCount: result?.modifiedCount || 0 }
+    const status = isActive === true || isActive === "true";
+    const result = await userModel.updateManyStatus(user_ids, status);
+    return { updatedCount: result?.modifiedCount || 0 };
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 const bulkDeleteAdmin = async ({ user_ids = [] }, actorId) => {
   try {
     if (!Array.isArray(user_ids) || user_ids.length === 0) {
-      throw new ApiError(StatusCodes.BAD_REQUEST, 'Danh sach nguoi dung khong hop le!')
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Danh sach nguoi dung khong hop le!",
+      );
     }
 
-    const actor = await userModel.findOneById(actorId)
+    const actor = await userModel.findOneById(actorId);
     if (!actor) {
-      throw new ApiError(StatusCodes.NOT_FOUND, 'Khong tim thay tai khoan thuc hien!')
+      throw new ApiError(
+        StatusCodes.NOT_FOUND,
+        "Khong tim thay tai khoan thuc hien!",
+      );
     }
 
     const result = await userModel.softDeleteMany(user_ids, {
       account_id: actorId,
-      email: actor.email
-    })
+      email: actor.email,
+    });
 
-    return { deletedCount: result?.modifiedCount || 0 }
+    return { deletedCount: result?.modifiedCount || 0 };
   } catch (error) {
-    throw error
+    throw error;
   }
-}
+};
 
 export const userService = {
   createNew,
@@ -1327,6 +1486,7 @@ export const userService = {
   setPassword,
   socialAuthCallback,
   verifyOAuth,
+  getAdminAuthProfile,
   updateSelfProfile,
   changePassword,
   getListAdmin,
@@ -1335,5 +1495,5 @@ export const userService = {
   updateAdmin,
   softDeleteAdmin,
   bulkUpdateStatusAdmin,
-  bulkDeleteAdmin
-}
+  bulkDeleteAdmin,
+};
