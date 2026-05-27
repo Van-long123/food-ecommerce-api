@@ -1,8 +1,10 @@
 import { StatusCodes } from "http-status-codes";
+import { ObjectId } from "mongodb";
 import { GET_CLIENT } from "~/config/mongodb";
 import { orderModel } from "~/models/orderModel";
 import { refundRequestModel } from "~/models/refundRequestModel";
 import { userModel } from "~/models/userModel";
+import { CloudinaryProvider } from "~/providers/CloudinaryProvider";
 import ApiError from "~/utils/ApiError";
 import { sendMail } from "~/utils/sendMail";
 import {
@@ -131,22 +133,69 @@ const buildRefundItems = (order, requestedItems = []) => {
   return { refundItems, amount };
 };
 
-const createRefundRequest = async (userId, payload) => {
+const parseJsonField = (value, fallback = null) => {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    return fallback;
+  }
+};
+
+const uploadRefundEvidenceFiles = async (files = []) => {
+  const uploads = await Promise.all(
+    files.map(async (file) => {
+      const result = await CloudinaryProvider.streamUpload(
+        file.buffer,
+        "smartfood-refund-requests",
+        file.mimetype,
+      );
+
+      return {
+        url: result.secure_url,
+        mimetype: file.mimetype,
+      };
+    }),
+  );
+
+  return uploads.reduce(
+    (acc, file) => {
+      if (file.mimetype.startsWith("image/")) {
+        acc.images.push(file.url);
+      } else if (file.mimetype.startsWith("video/")) {
+        acc.videos.push(file.url);
+      }
+      return acc;
+    },
+    { images: [], videos: [] },
+  );
+};
+
+const createRefundRequest = async (userId, payload, files = []) => {
   try {
     const {
       orderId,
-      items,
       reason,
-      images = [],
-      videos = [],
       refundMethod = "bank_transfer",
     } = payload || {};
+
+    const parsedItems = parseJsonField(payload?.items, []);
+    const parsedBankInfo = parseJsonField(payload?.bankInfo, null);
+    const parsedVideos = parseJsonField(payload?.videos, []);
+    const parsedImages = parseJsonField(payload?.images, []);
 
     if (!orderId) {
       throw new ApiError(StatusCodes.BAD_REQUEST, "Thiếu mã đơn hàng");
     }
 
-    if (!Array.isArray(images) || images.length === 0) {
+    if (!Array.isArray(files) || files.length === 0) {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
         "Vui lòng cung cấp ít nhất một hình ảnh minh chứng",
@@ -172,7 +221,8 @@ const createRefundRequest = async (userId, payload) => {
       );
     }
 
-    const { refundItems, amount } = buildRefundItems(order, items);
+    const { refundItems, amount } = buildRefundItems(order, parsedItems);
+    const evidence = await uploadRefundEvidenceFiles(files);
 
     const normalizedRefundMethod = ["bank_transfer", "cash_on_pickup"].includes(
       refundMethod,
@@ -185,10 +235,11 @@ const createRefundRequest = async (userId, payload) => {
       userId,
       items: refundItems,
       reason: String(reason || "").trim(),
-      images,
-      videos: Array.isArray(videos) ? videos : [],
+      images: [...(Array.isArray(parsedImages) ? parsedImages : []), ...evidence.images],
+      videos: [...(Array.isArray(parsedVideos) ? parsedVideos : []), ...evidence.videos],
       amount,
       refundMethod: normalizedRefundMethod,
+      bankInfo: normalizedRefundMethod === "bank_transfer" ? parsedBankInfo : null,
     };
 
     if (!refundPayload.reason) {
@@ -215,6 +266,59 @@ const getRefundRequestByOrder = async (userId, orderId) => {
       userId,
     );
     return refundRequest;
+  } catch (error) {
+    throw error;
+  }
+};
+
+const submitBankInfo = async (userId, requestId, payload) => {
+  try {
+    const refundRequest = await refundRequestModel.findByIdAndUserId(
+      requestId,
+      userId,
+    );
+    if (!refundRequest) {
+      throw new ApiError(
+        StatusCodes.NOT_FOUND,
+        "Không tìm thấy yêu cầu hoàn tiền",
+      );
+    }
+
+    if (refundRequest.refundMethod !== "bank_transfer") {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Yêu cầu hoàn tiền không sử dụng phương thức chuyển khoản",
+      );
+    }
+
+    if (
+      refundRequest.status ===
+        refundRequestModel.REFUND_REQUEST_STATUSES.REJECTED ||
+      refundRequest.status ===
+        refundRequestModel.REFUND_REQUEST_STATUSES.COMPLETED
+    ) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Yêu cầu hoàn tiền đã kết thúc",
+      );
+    }
+
+    const bankName = String(payload?.bankName || "").trim();
+    const accountNumber = String(payload?.accountNumber || "").trim();
+    const accountHolder = String(payload?.accountHolder || "").trim();
+
+    if (!bankName || !accountNumber || !accountHolder) {
+      throw new ApiError(
+        StatusCodes.BAD_REQUEST,
+        "Vui lòng cung cấp đầy đủ thông tin ngân hàng",
+      );
+    }
+
+    const updated = await refundRequestModel.updateById(requestId, {
+      bankInfo: { bankName, accountNumber, accountHolder },
+    });
+
+    return updated.value;
   } catch (error) {
     throw error;
   }
@@ -379,16 +483,18 @@ const completeRefundRequest = async (requestId, payload) => {
       { session },
     );
 
+    const updatedValue = updatedRefund?.value;
+
     await session.commitTransaction();
 
-    if (updatedRefund) {
-      const user = await userModel.findOneById(updatedRefund.userId.toString());
+    if (updatedValue) {
+      const user = await userModel.findOneById(updatedValue.userId.toString());
       if (user?.email) {
         const emailHtml = getRefundCompletedTemplate({
-          orderId: updatedRefund.orderId?.toString() || "",
-          amount: updatedRefund.amount || 0,
-          transactionImage: updatedRefund.transactionImage || "",
-          refundMethod: updatedRefund.refundMethod || "bank_transfer",
+          orderId: updatedValue.orderId?.toString() || "",
+          amount: updatedValue.amount || 0,
+          transactionImage: updatedValue.transactionImage || "",
+          refundMethod: updatedValue.refundMethod || "bank_transfer",
         });
         sendMail(
           user.email,
@@ -400,7 +506,7 @@ const completeRefundRequest = async (requestId, payload) => {
       }
     }
 
-    return updatedRefund;
+    return updatedValue;
   } catch (error) {
     await session.abortTransaction();
     throw error;
@@ -409,10 +515,170 @@ const completeRefundRequest = async (requestId, payload) => {
   }
 };
 
+const buildAdminRefundListItem = (refundRequest) => {
+  const id = refundRequest?._id?.toString() || "";
+  const orderId = refundRequest?.orderId?.toString() || "";
+  const userId = refundRequest?.userId?.toString() || "";
+  const customerName =
+    refundRequest?.order?.userInfo?.fullname ||
+    refundRequest?.user?.displayName ||
+    "";
+
+  return {
+    id,
+    orderId,
+    userId,
+    customerName,
+    refundMethod: refundRequest?.refundMethod,
+    amount: refundRequest?.amount || 0,
+    status: refundRequest?.status,
+    createdAt: refundRequest?.createdAt,
+    updatedAt: refundRequest?.updatedAt || null,
+  };
+};
+
+const buildRefundItemsWithNames = (refundRequest) => {
+  const orderItems = Array.isArray(refundRequest?.orderItems)
+    ? refundRequest.orderItems
+    : [];
+  const productMap = new Map(
+    orderItems.map((item) => [item.productId?.toString(), item.title]),
+  );
+
+  return (refundRequest?.items || []).map((item) => ({
+    productId: String(item.productId || ""),
+    productName: productMap.get(String(item.productId || "")) || "Sản phẩm",
+    quantity: item.quantity,
+    price: item.price,
+  }));
+};
+
+const getAdminRefundRequests = async ({
+  page = 1,
+  perPage = 10,
+  keyword = "",
+  status = "",
+  refundMethod = "",
+  sortField = "createdAt",
+  sortOrder = "desc",
+} = {}) => {
+  try {
+    const match = {};
+    if (status && status !== "all") {
+      match.status = status;
+    }
+    if (refundMethod && refundMethod !== "all") {
+      match.refundMethod = refundMethod;
+    }
+
+    const keywordQuery = {};
+    const kw = String(keyword || "").trim();
+    if (kw) {
+      const orConditions = [];
+      if (ObjectId.isValid(kw)) {
+        const objectId = new ObjectId(kw);
+        orConditions.push({ _id: objectId }, { orderId: objectId });
+      }
+
+      const isNumber = /^\d+$/.test(kw);
+      if (isNumber) {
+        orConditions.push({ "order.orderCode": Number(kw) });
+      }
+
+      orConditions.push(
+        { "order.userInfo.fullname": { $regex: kw, $options: "i" } },
+        { "user.displayName": { $regex: kw, $options: "i" } },
+        { "user.phone": { $regex: kw, $options: "i" } },
+      );
+
+      keywordQuery.$or = orConditions;
+    }
+
+    const sort = { [sortField]: sortOrder === "asc" ? 1 : -1 };
+    const skip = (page - 1) * perPage;
+
+    const [requests, total, summaryRows] = await Promise.all([
+      refundRequestModel.getAdminRefundRequests({
+        match,
+        keywordQuery: keywordQuery.$or ? keywordQuery : null,
+        sort,
+        skip,
+        limit: perPage,
+      }),
+      refundRequestModel.countAdminRefundRequests({
+        match,
+        keywordQuery: keywordQuery.$or ? keywordQuery : null,
+      }),
+      refundRequestModel.getAdminRefundSummary(),
+    ]);
+
+    const summary = {
+      pending: 0,
+      approved_waiting_pickup: 0,
+      processing_refund: 0,
+      completed: 0,
+      rejected: 0,
+      totalAmount: 0,
+    };
+
+    summaryRows.forEach((row) => {
+      if (row?._id && summary[row._id] !== undefined) {
+        summary[row._id] = row.count || 0;
+      }
+      if (row?.totalAmount) {
+        summary.totalAmount += row.totalAmount;
+      }
+    });
+
+    return {
+      data: requests.map(buildAdminRefundListItem),
+      pagination: {
+        page: Number(page),
+        perPage: Number(perPage),
+        total,
+        totalPages: Math.ceil(total / perPage),
+      },
+      summary,
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+const getAdminRefundRequestDetail = async (requestId) => {
+  try {
+    const refundRequest =
+      await refundRequestModel.getAdminRefundRequestDetail(requestId);
+    if (!refundRequest) {
+      throw new ApiError(
+        StatusCodes.NOT_FOUND,
+        "Không tìm thấy yêu cầu hoàn tiền",
+      );
+    }
+
+    return {
+      ...buildAdminRefundListItem(refundRequest),
+      reason: refundRequest.reason || "",
+      images: refundRequest.images || [],
+      videos: refundRequest.videos || [],
+      items: buildRefundItemsWithNames(refundRequest),
+      bankInfo: refundRequest.bankInfo || null,
+      refundMethod: refundRequest.refundMethod,
+      rejectReason: refundRequest.rejectReason || "",
+      transactionImage: refundRequest.transactionImage || "",
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
 export const refundRequestService = {
   createRefundRequest,
   getRefundRequestByOrder,
+  submitBankInfo,
   approveRefundRequest,
   rejectRefundRequest,
   completeRefundRequest,
+  getAdminRefundRequests,
+  getAdminRefundRequestDetail,
 };

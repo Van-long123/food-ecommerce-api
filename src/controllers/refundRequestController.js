@@ -47,7 +47,11 @@ const uploadEvidence = async (req, res, next) => {
 const createRefundRequest = async (req, res, next) => {
   try {
     const userId = req.jwtDecoded._id;
-    const result = await refundRequestService.createRefundRequest(userId, req.body);
+    const result = await refundRequestService.createRefundRequest(
+      userId,
+      req.body,
+      req.files || [],
+    );
 
     res.status(StatusCodes.CREATED).json({
       success: true,
@@ -134,11 +138,77 @@ const rejectRefundRequest = async (req, res, next) => {
 const completeRefundRequest = async (req, res, next) => {
   try {
     const requestId = req.params.id;
-    const result = await refundRequestService.completeRefundRequest(requestId, req.body);
+    let payload = req.body || {};
+
+    if (req.file) {
+      const result = await CloudinaryProvider.streamUpload(
+        req.file.buffer,
+        "smartfood-refund-transactions",
+        req.file.mimetype,
+      );
+      payload = {
+        ...payload,
+        transactionImage: result.secure_url,
+      };
+    }
+
+    const result = await refundRequestService.completeRefundRequest(
+      requestId,
+      payload,
+    );
 
     res.status(StatusCodes.OK).json({
       success: true,
       message: "Hoàn tất hoàn tiền thành công",
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getAdminRefundRequests = async (req, res, next) => {
+  try {
+    const {
+      page,
+      perPage,
+      keyword,
+      status,
+      refundMethod,
+      sortField,
+      sortOrder,
+    } = req.query;
+
+    const result = await refundRequestService.getAdminRefundRequests({
+      page: Number(page) || 1,
+      perPage: Number(perPage) || 10,
+      keyword: keyword || "",
+      status: status || "",
+      refundMethod: refundMethod || "",
+      sortField: sortField || "createdAt",
+      sortOrder: sortOrder || "desc",
+    });
+
+    res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Lấy danh sách yêu cầu hoàn tiền thành công",
+      ...result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getAdminRefundRequestDetail = async (req, res, next) => {
+  try {
+    const requestId = req.params.id;
+    const result = await refundRequestService.getAdminRefundRequestDetail(
+      requestId,
+    );
+
+    res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Lấy chi tiết yêu cầu hoàn tiền thành công",
       data: result,
     });
   } catch (error) {
@@ -154,4 +224,6 @@ export const refundRequestController = {
   approveRefundRequest,
   rejectRefundRequest,
   completeRefundRequest,
+  getAdminRefundRequests,
+  getAdminRefundRequestDetail,
 };

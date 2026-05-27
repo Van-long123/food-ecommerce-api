@@ -228,7 +228,7 @@ const getDetailAdmin = async (id) => {
   }
 };
 
-// ─── ADMIN: Update (có thể cập nhật categories cùng lúc) ─────────────────────
+// ─── ADMIN: Update (có thể cập nhật categories cùng lúc)
 const update = async (id, reqBody, actorId, files = null) => {
   try {
     const product = await productModel.findOneById(id);

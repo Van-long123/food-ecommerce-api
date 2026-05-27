@@ -59,9 +59,51 @@ const REFUND_REQUEST_SCHEMA = Joi.object({
     .default(REFUND_REQUEST_STATUSES.PENDING),
   amount: Joi.number().min(0).required(),
   rejectReason: Joi.string().allow("").default(""),
+  transactionImage: Joi.string().allow("").default(""),
   createdAt: Joi.date().default(() => new Date()),
   updatedAt: Joi.date().default(null),
 });
+
+const buildAdminLookupStages = () => [
+  {
+    $lookup: {
+      from: "orders",
+      localField: "orderId",
+      foreignField: "_id",
+      as: "order",
+    },
+  },
+  {
+    $addFields: {
+      order: { $arrayElemAt: ["$order", 0] },
+    },
+  },
+  {
+    $lookup: {
+      from: "users",
+      localField: "userId",
+      foreignField: "_id",
+      as: "user",
+    },
+  },
+  {
+    $addFields: {
+      user: { $arrayElemAt: ["$user", 0] },
+    },
+  },
+];
+
+const buildAdminDetailLookupStages = () => [
+  ...buildAdminLookupStages(),
+  {
+    $lookup: {
+      from: "order_items",
+      localField: "orderId",
+      foreignField: "orderId",
+      as: "orderItems",
+    },
+  },
+];
 
 const validateBeforeCreate = async (data) => {
   return REFUND_REQUEST_SCHEMA.validateAsync(data, { abortEarly: false });
@@ -74,6 +116,10 @@ const createNew = async (data, options = {}) => {
       ...validData,
       orderId: new ObjectId(validData.orderId),
       userId: new ObjectId(validData.userId),
+      items: validData.items.map((item) => ({
+        ...item,
+        productId: new ObjectId(item.productId),
+      })),
       createdAt: new Date(validData.createdAt),
       updatedAt: validData.updatedAt ? new Date(validData.updatedAt) : null,
     };
@@ -139,6 +185,98 @@ const updateById = async (id, updateData, options = {}) => {
   }
 };
 
+const getAdminRefundRequests = async (
+  { match = {}, keywordQuery = null, sort = { createdAt: -1 }, skip = 0, limit = 10 } = {},
+  options = {},
+) => {
+  try {
+    const pipeline = [
+      { $match: match },
+      ...buildAdminLookupStages(),
+      ...(keywordQuery ? [{ $match: keywordQuery }] : []),
+      { $sort: sort },
+      { $skip: skip },
+      { $limit: Number(limit) },
+    ];
+
+    return await GET_DB()
+      .collection(REFUND_REQUEST_COLLECTION_NAME)
+      .aggregate(pipeline, options)
+      .toArray();
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const countAdminRefundRequests = async (
+  { match = {}, keywordQuery = null } = {},
+  options = {},
+) => {
+  try {
+    const pipeline = [
+      { $match: match },
+      ...buildAdminLookupStages(),
+      ...(keywordQuery ? [{ $match: keywordQuery }] : []),
+      { $count: "total" },
+    ];
+
+    const result = await GET_DB()
+      .collection(REFUND_REQUEST_COLLECTION_NAME)
+      .aggregate(pipeline, options)
+      .toArray();
+
+    return result[0]?.total || 0;
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const getAdminRefundRequestDetail = async (id, options = {}) => {
+  try {
+    const pipeline = [
+      { $match: { _id: new ObjectId(id) } },
+      ...buildAdminDetailLookupStages(),
+    ];
+
+    const { session, ...mongoOptions } = options;
+    const collection = GET_DB().collection(REFUND_REQUEST_COLLECTION_NAME);
+    const result = session
+      ? await collection.aggregate(pipeline, { session, ...mongoOptions }).toArray()
+      : await collection.aggregate(pipeline, mongoOptions).toArray();
+
+    return result[0] || null;
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const getAdminRefundSummary = async (match = {}, options = {}) => {
+  try {
+    return await GET_DB()
+      .collection(REFUND_REQUEST_COLLECTION_NAME)
+      .aggregate(
+        [
+          { $match: match },
+          {
+            $group: {
+              _id: "$status",
+              count: { $sum: 1 },
+              totalAmount: {
+                $sum: {
+                  $cond: [{ $eq: ["$status", "completed"] }, "$amount", 0],
+                },
+              },
+            },
+          },
+        ],
+        options,
+      )
+      .toArray();
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
 export const refundRequestModel = {
   REFUND_REQUEST_COLLECTION_NAME,
   REFUND_REQUEST_STATUSES,
@@ -148,4 +286,8 @@ export const refundRequestModel = {
   findByIdAndUserId,
   findLatestByOrderIdAndUserId,
   updateById,
+  getAdminRefundRequests,
+  countAdminRefundRequests,
+  getAdminRefundRequestDetail,
+  getAdminRefundSummary,
 };

@@ -15,6 +15,7 @@ router.post(
 router.post(
   "/",
   authMiddleware.isAuthorized,
+  multerUploadMiddleware.upload.array("evidence"),
   refundRequestController.createRefundRequest,
 );
 
