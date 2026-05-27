@@ -12,6 +12,7 @@ import { adminReviewRoute } from './reviewRoute'
 import { adminVoucherRoute } from './voucherRoute'
 import { adminOrderRoute } from './orderRoute'
 import { adminPaymentRoute } from './paymentRoute'
+import { adminDashboardRoute } from './dashboardRoute'
 
 
 const router = express.Router()
@@ -30,5 +31,6 @@ router.use('/reviews', adminReviewRoute)
 router.use('/vouchers', adminVoucherRoute)
 router.use('/orders', adminOrderRoute)
 router.use('/payments', adminPaymentRoute)
+router.use('/dashboard', adminDashboardRoute)
 
 export const adminRouter = router
