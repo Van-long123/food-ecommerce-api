@@ -5,8 +5,7 @@ import ApiError from "~/utils/ApiError";
 
 /**
  * Chuẩn hóa dữ liệu danh sách sản phẩm gửi lên để validate voucher.
- * Đảm bảo các trường dữ liệu là đúng kiểu và giá trị hợp lệ.
- */
+ * Đảm bảo các trường dữ liệu là đúng kiểu và giá trị hợp lệ. */
 const normalizeValidationItems = (items = []) => {
   return items
     .map((item) => {
@@ -30,8 +29,7 @@ const normalizeValidationItems = (items = []) => {
 
 /**
  * Kiểm tra xem một sản phẩm cụ thể có nằm trong phạm vi áp dụng của voucher hay không.
- * Hỗ trợ áp dụng cho: Tất cả, Danh mục cụ thể, hoặc Sản phẩm cụ thể.
- */
+ * Hỗ trợ áp dụng cho: Tất cả, Danh mục cụ thể, hoặc Sản phẩm cụ thể. */
 const isItemInVoucherScope = (voucher, item) => {
   if (voucher.applyFor === voucherModel.VOUCHER_APPLY_FOR.ALL) return true;
 
@@ -53,8 +51,7 @@ const isItemInVoucherScope = (voucher, item) => {
 /**
  * Phân bổ số tiền giảm giá cho từng sản phẩm đủ điều kiện (Fair-Share).
  * Sử dụng thuật toán phân bổ phần dư theo thứ tự ưu tiên (phần thập phân lớn nhất)
- * để đảm bảo tổng số tiền giảm giá sau khi làm tròn khớp chính xác với discountAmount.
- */
+ * để đảm bảo tổng số tiền giảm giá sau khi làm tròn khớp chính xác với discountAmount. */
 const allocateDiscountBreakdown = (eligibleItems, discountAmount) => {
   const totalEligibleAmount = eligibleItems.reduce(
     (sum, item) => sum + item.lineTotal,
@@ -106,8 +103,7 @@ const allocateDiscountBreakdown = (eligibleItems, discountAmount) => {
 
 /**
  * Hàm validate voucher chính dùng cho quy trình thanh toán (Checkout).
- * Kiểm tra: Tồn tại, Thời hạn, Trạng thái, Lượt dùng (tổng/cá nhân), Giá trị đơn tối thiểu, Phạm vi áp dụng.
- */
+ * Kiểm tra: Tồn tại, Thời hạn, Trạng thái, Lượt dùng (tổng/cá nhân), Giá trị đơn tối thiểu, Phạm vi áp dụng. */
 const validateVoucherForCheckout = async (
   { code, orderValue, items = [], shippingFee = 0 },
   accountId = null,

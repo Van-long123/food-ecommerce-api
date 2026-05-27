@@ -16,8 +16,7 @@ const validateBeforeCreate = async (data) => {
 }
 
 /**
- * Upsert: nếu đã tồn tại (product_id + category_id) thì update, chưa có thì insert
- */
+ * Upsert: nếu đã tồn tại (product_id + category_id) thì update, chưa có thì insert */
 const upsert = async ({ product_id, category_id }) => {
   try {
     const filter = {
@@ -42,8 +41,7 @@ const upsert = async ({ product_id, category_id }) => {
 }
 
 /**
- * Xóa một mapping cụ thể
- */
+ * Xóa một mapping cụ thể */
 const removeOne = async ({ product_id, category_id }) => {
   try {
     return await GET_DB()
@@ -58,8 +56,7 @@ const removeOne = async ({ product_id, category_id }) => {
 }
 
 /**
- * Xóa tất cả categories của một product (dùng khi soft-delete product)
- */
+ * Xóa tất cả categories của một product (dùng khi soft-delete product) */
 const deleteAllByProductId = async (product_id) => {
   try {
     return await GET_DB()
@@ -71,8 +68,7 @@ const deleteAllByProductId = async (product_id) => {
 }
 
 /**
- * Lấy tất cả category_ids của một product
- */
+ * Lấy tất cả category_ids của một product */
 const findAllByProductId = async (product_id) => {
   try {
     return await GET_DB()
@@ -87,8 +83,7 @@ const findAllByProductId = async (product_id) => {
 /**
  * Đồng bộ lại danh sách categories cho product:
  * - Xóa hết mappings cũ không còn trong categoryIds mới
- * - Upsert các mapping mới/cập nhật
- */
+ * - Upsert các mapping mới/cập nhật */
 const syncByProductId = async (product_id, categoryIds = []) => {
   try {
     const pId = new ObjectId(product_id)

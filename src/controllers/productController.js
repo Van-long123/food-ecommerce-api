@@ -2,7 +2,7 @@ import { StatusCodes } from 'http-status-codes'
 import { productService } from '~/services/productService'
 import { recommendationService } from '~/services/recommendationService'
 
-// ─── ADMIN ─────────────────────────────────────────────────────────────────────
+// ADMIN
 
 const createNew = async (req, res, next) => {
   try {
@@ -69,7 +69,7 @@ const removeCategory = async (req, res, next) => {
   } catch (error) { next(error) }
 }
 
-// ─── CLIENT ────────────────────────────────────────────────────────────────────
+// CLIENT
 
 const getListClient = async (req, res, next) => {
   try {

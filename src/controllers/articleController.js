@@ -1,7 +1,7 @@
 import { StatusCodes } from 'http-status-codes'
 import { articleService } from '~/services/articleService'
 
-// ─── ADMIN ─────────────────────────────────────────────────────────────────────
+// ADMIN
 
 const createNew = async (req, res, next) => {
   try {
@@ -68,7 +68,7 @@ const removeCategory = async (req, res, next) => {
   } catch (error) { next(error) }
 }
 
-// ─── CLIENT ────────────────────────────────────────────────────────────────────
+// CLIENT
 
 const getListClient = async (req, res, next) => {
   try {

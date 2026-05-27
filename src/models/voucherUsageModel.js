@@ -15,8 +15,7 @@ const VOUCHER_USAGE_SCHEMA = Joi.object({
 })
 
 /**
- * Lấy số lần đã dùng voucher của 1 user cụ thể
- */
+ * Lấy số lần đã dùng voucher của 1 user cụ thể */
 const countUsageByUser = async (voucherId, userId) => {
   try {
     return await GET_DB().collection(VOUCHER_USAGE_COLLECTION_NAME).countDocuments({
@@ -29,8 +28,7 @@ const countUsageByUser = async (voucherId, userId) => {
 }
 
 /**
- * Ghi lại usage khi user dùng voucher
- */
+ * Ghi lại usage khi user dùng voucher */
 const recordUsage = async ({ voucherId, userId, orderId = null }, options = {}) => {
   try {
     const { session, maxUsage } = options

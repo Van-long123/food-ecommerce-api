@@ -218,8 +218,7 @@ const updateStatusById = async (orderId, status, options = {}) => {
 };
 
 /**
- * Cập nhật trạng thái đơn hàng kèm mốc deliveredAt (dùng khi xác nhận đã nhận hàng).
- */
+ * Cập nhật trạng thái đơn hàng kèm mốc deliveredAt (dùng khi xác nhận đã nhận hàng). */
 const updateStatusWithDeliveredAt = async (
   orderId,
   userId,
@@ -246,8 +245,7 @@ const updateStatusWithDeliveredAt = async (
 
 /**
  * Tìm các đơn hàng có trạng thái 'shipping' đã quá thời hạn cho việc tự động hoàn thành.
- * olderThanDays - Số ngày (tính từ updatedAt)
- */
+ * olderThanDays - Số ngày (tính từ updatedAt) */
 const findShippingOrdersOlderThan = async (olderThanDays = 3) => {
   try {
     const cutoffDate = new Date();

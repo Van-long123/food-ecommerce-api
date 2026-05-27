@@ -5,15 +5,13 @@ import { GET_CLIENT } from "~/config/mongodb";
 import { env } from "~/config/environment";
 /**
  * Số ngày tối đa đơn hàng được phép ở trạng thái "shipping"
- * trước khi hệ thống tự động chuyển sang "delivered".
- */
+ * trước khi hệ thống tự động chuyển sang "delivered". */
 const AUTO_COMPLETE_DAYS = parseInt(env.ORDER_AUTO_COMPLETE_DAYS || "3", 10);
 
 /**
  * Xử lý một đơn hàng: chuyển "shipping" → "delivered"
  * và cộng dồn soldCount cho tất cả sản phẩm trong đơn.
- * Mỗi đơn hàng chạy trong một Transaction riêng để đảm bảo tính toàn vẹn dữ liệu.
- */
+ * Mỗi đơn hàng chạy trong một Transaction riêng để đảm bảo tính toàn vẹn dữ liệu. */
 const processOneOrder = async (order) => {
   const session = GET_CLIENT().startSession();
   try {
@@ -65,8 +63,7 @@ const processOneOrder = async (order) => {
 };
 
 /**
- * Hàm quét DB và tự động hoàn thành các đơn hàng quá hạn.
- */
+ * Hàm quét DB và tự động hoàn thành các đơn hàng quá hạn. */
 const runAutoComplete = async () => {
   try {
     console.log('[AutoComplete] Đang quét các đơn hàng "shipping" quá hạn...');
@@ -99,8 +96,7 @@ const runAutoComplete = async () => {
 /**
  * node-cron là thư viện trong Node.js dùng để chạy các tác vụ theo lịch tự động
  * Khởi chạy cron job tự động hoàn thành đơn hàng.
- * Lịch mặc định: chạy mỗi giờ vào đầu giờ (0 * * * *).
- */
+ * Lịch mặc định: chạy mỗi giờ vào đầu giờ (0 * * * *). */
 export const startOrderAutoCompleteJob = () => {
   const schedule = "0 * * * *"; //Chạy mỗi giờ
   // const schedule = "* * * * *"; // Chạy mỗi phút

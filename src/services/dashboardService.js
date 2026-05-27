@@ -9,8 +9,7 @@ import { GET_DB } from "~/config/mongodb";
  *  - revenueChart: doanh thu 12 tháng của năm hiện tại
  *  - ordersChart: số đơn hàng 7 ngày gần nhất
  *  - topProducts: top 7 sản phẩm bán chạy nhất (kèm thông tin category, ảnh)
- *  - recentOrders: 5 đơn hàng mới nhất
- */
+ *  - recentOrders: 5 đơn hàng mới nhất */
 const getDashboardOverview = async () => {
   const db = GET_DB();
   const now = new Date();
@@ -36,7 +35,7 @@ const getDashboardOverview = async () => {
   // Mốc đầu năm (cho biểu đồ doanh thu 12 tháng)
   const startOfYear = new Date(now.getFullYear(), 0, 1);
 
-  // ── 1. STATS TỔNG HỢP ─────────────────────────────────────────────────────
+  // 1. STATS TỔNG HỢP
   const [statsResult, prevMonthStats] = await Promise.all([
     // Stats tháng hiện tại + tổng
     db
@@ -194,7 +193,7 @@ const getDashboardOverview = async () => {
     },
   };
 
-  // ── 2. BIỂU ĐỒ DOANH THU 12 THÁNG
+  // 2. BIỂU ĐỒ DOANH THU 12 THÁNG
   const revenueByMonth = await db
     .collection("payments")
     .aggregate([
@@ -220,7 +219,7 @@ const getDashboardOverview = async () => {
     return found ? Math.round(found.revenue / 1_000_000) : 0;
   });
 
-  // ── 3. BIỂU ĐỒ ĐƠN HÀNG 7 NGÀY
+  // 3. BIỂU ĐỒ ĐƠN HÀNG 7 NGÀY
   const ordersByDay = await db
     .collection("orders")
     .aggregate([
@@ -257,7 +256,7 @@ const getDashboardOverview = async () => {
     };
   });
 
-  // ── 4. TOP 5 SẢN PHẨM BÁN CHẠY NHẤT
+  // 4. TOP 5 SẢN PHẨM BÁN CHẠY NHẤT
   const topProducts = await db
     .collection("products")
     .aggregate([
@@ -307,7 +306,7 @@ const getDashboardOverview = async () => {
     category: p.category?.title || "Chưa phân loại",
   }));
 
-  // ── 5. 5 ĐƠN HÀNG MỚI NHẤT
+  // 5. 5 ĐƠN HÀNG MỚI NHẤT
   const recentOrders = await db
     .collection("orders")
     .aggregate([
@@ -351,21 +350,20 @@ export const dashboardService = {
   getExportData,
 };
 
-// ── Export Data (dùng cho xuất Excel)
+// Export Data (dùng cho xuất Excel)
 /**
  * Lấy toàn bộ dữ liệu cần thiết cho báo cáo Excel 4 sheet:
  *  1. Doanh thu theo tháng (12 tháng năm hiện tại)
  *  2. Toàn bộ đơn hàng
  *  3. Toàn bộ sản phẩm active
- *  4. Toàn bộ yêu cầu hoàn tiền
- */
+ *  4. Toàn bộ yêu cầu hoàn tiền */
 async function getExportData() {
   const db = GET_DB();
   const now = new Date();
   const startOfYear = new Date(now.getFullYear(), 0, 1);
 
   const [revenueByMonth, orders, products, refunds] = await Promise.all([
-    // ── Sheet 1: Doanh thu theo tháng
+    // Sheet 1: Doanh thu theo tháng
     db
       .collection("payments")
       .aggregate([
@@ -410,7 +408,7 @@ async function getExportData() {
       ])
       .toArray(),
 
-    // ── Sheet 2: Đơn hàng (tối đa 2000 bản ghi)
+    // Sheet 2: Đơn hàng (tối đa 2000 bản ghi)
     db
       .collection("orders")
       .aggregate([
@@ -429,7 +427,7 @@ async function getExportData() {
       ])
       .toArray(),
 
-    // ── Sheet 3: Sản phẩm active
+    // Sheet 3: Sản phẩm active
     db
       .collection("products")
       .aggregate([
@@ -462,7 +460,7 @@ async function getExportData() {
       ])
       .toArray(),
 
-    // ── Sheet 4: Hoàn tiền
+    // Sheet 4: Hoàn tiền
     db
       .collection("refund_requests")
       .aggregate([

@@ -1,7 +1,7 @@
 import { StatusCodes } from "http-status-codes";
 import { orderService } from "~/services/orderService";
 
-//  CLIENT-SIDE HANDLERS
+// CLIENT-SIDE HANDLERS
 const validateStock = async (req, res, next) => {
   try {
     const items = req.body.items || [];
@@ -102,9 +102,7 @@ const confirmReceived = async (req, res, next) => {
   }
 };
 
-// ══════════════════════════════════════════════════════════════
-//  ADMIN-SIDE HANDLERS
-// ══════════════════════════════════════════════════════════════
+// ADMIN-SIDE HANDLERS
 
 const getOrders = async (req, res, next) => {
   try {
@@ -270,14 +268,14 @@ const getPaymentStats = async (req, res, next) => {
 };
 
 export const orderController = {
-  // ── Client ──────────────────────────────────────────────────
+  // Client
   validateStock,
   createNew,
   getMyOrders,
   getOrderDetails,
   cancelOrder,
   confirmReceived,
-  // ── Admin ───────────────────────────────────────────────────
+  // Admin
   getOrders,
   getOrderDetailAdmin,
   updateOrderStatus,

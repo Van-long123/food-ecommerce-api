@@ -29,26 +29,26 @@ const getCampaignProducts = async (req, res, next) => {
 };
 
 // const getHomeCategoryProducts = async (req, res, next) => {
-//   try {
-//     const result = await homeService.getHomeCategoryProducts({
-//       slug: req.query.slug,
-//       categoryProductLimit: req.query.limit
-//     })
-//     res.status(StatusCodes.OK).json(result)
-//   } catch (error) {
-//     next(error)
-//   }
+// try {
+// const result = await homeService.getHomeCategoryProducts({
+// slug: req.query.slug,
+// categoryProductLimit: req.query.limit
+// })
+// res.status(StatusCodes.OK).json(result)
+// } catch (error) {
+// next(error)
+// }
 // }
 
 // const getHomeBlogs = async (req, res, next) => {
-//   try {
-//     const result = await homeService.getHomeBlogs({
-//       blogLimit: req.query.limit
-//     })
-//     res.status(StatusCodes.OK).json(result)
-//   } catch (error) {
-//     next(error)
-//   }
+// try {
+// const result = await homeService.getHomeBlogs({
+// blogLimit: req.query.limit
+// })
+// res.status(StatusCodes.OK).json(result)
+// } catch (error) {
+// next(error)
+// }
 // }
 
 export const homeController = {

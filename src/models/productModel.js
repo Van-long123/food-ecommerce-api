@@ -106,7 +106,9 @@ const createNew = async (data) => {
       updatedAt: validData.updatedAt ? new Date(validData.updatedAt) : null,
     };
     if (persistData.createdBy?.account_id) {
-      persistData.createdBy.account_id = new ObjectId(persistData.createdBy.account_id);
+      persistData.createdBy.account_id = new ObjectId(
+        persistData.createdBy.account_id,
+      );
     }
     const result = await GET_DB()
       .collection(PRODUCT_COLLECTION_NAME)
@@ -218,8 +220,7 @@ const increaseStock = async (productId, quantity, options = {}) => {
 };
 
 /**
- * Tăng số lượng đã bán (soldCount) cho nhiều sản phẩm trong một Transaction session.
- */
+ * Tăng số lượng đã bán (soldCount) cho nhiều sản phẩm trong một Transaction session. */
 const increaseSoldCountMany = async (items = [], options = {}) => {
   try {
     const ops = items
@@ -245,8 +246,7 @@ const increaseSoldCountMany = async (items = [], options = {}) => {
  *  - primary_category: thông tin category chính (lookup bằng primary_category_id)
  *  - categories: tất cả categories mà product thuộc về (qua category_products)
  *
- * Giống boardModel.getDetails() dùng aggregate + nhiều $lookup stage.
- */
+ * Giống boardModel.getDetails() dùng aggregate + nhiều $lookup stage. */
 const getDetails = async (identifier) => {
   try {
     const identifierStr = String(identifier || "").trim();
@@ -457,8 +457,7 @@ const syncRatingsFromReviews = async (productId) => {
 };
 
 /**
- * Danh sách products với $facet (data + count trong một query) — giống boardModel.getBoards().
- */
+ * Danh sách products với $facet (data + count trong một query) — giống boardModel.getBoards(). */
 const getList = async ({
   queryConditions = [],
   page = 1,
@@ -553,7 +552,9 @@ const pushUpdatedBy = async (id, actorId, actorEmail) => {
       .updateOne(
         { _id: new ObjectId(id) },
         {
-          $push: { updatedBy: { account_id: new ObjectId(actorId), email: actorEmail } },
+          $push: {
+            updatedBy: { account_id: new ObjectId(actorId), email: actorEmail },
+          },
           $set: { updatedAt: new Date() },
         },
       );
@@ -635,8 +636,7 @@ const getPaginatedCampaignProducts = async ({
 };
 
 /**
- * Lấy products của một category — dùng trong homeService (aggregate pipeline)
- */
+ * Lấy products của một category — dùng trong homeService (aggregate pipeline) */
 const getProductsByCategory = async (categoryId, limit = 20) => {
   try {
     const categoryIdStr = categoryId.toString();
@@ -663,8 +663,7 @@ const getProductsByCategory = async (categoryId, limit = 20) => {
 };
 
 /**
- * [Category Page]
- */
+ * [Category Page] */
 const getListByPrimaryCategory = async ({
   categoryId,
   page = 1,
@@ -786,7 +785,7 @@ const getListByPrimaryCategory = async ({
               { $skip: (sanitizedPage - 1) * sanitizedLimit },
               { $limit: sanitizedLimit },
               {
-                //  ko có $project thì data sẽ là các field của category_product + product nested
+                // ko có $project thì data sẽ là các field của category_product + product nested
                 $project: {
                   _id: "$product._id",
                   // categoryId: '$category_id',
@@ -843,111 +842,8 @@ const getListByPrimaryCategory = async ({
     throw new Error(error);
   }
 };
-
 /**
- * Lấy category chi tiết kèm danh sách products của nó (qua slug)
- * Phục vụ trang danh sách sản phẩm theo category
- */
-// const getByCategorySlug = async (slug, limit = 20) => {
-//   try {
-//     const result = await GET_DB().collection('categories').aggregate([
-//       // 1. Tìm category theo slug
-//       { $match: { slug: slug, deleted: false, status: 'active' } },
-
-//       // 2. Lookup sang category_products để lấy danh sách product_id
-//       {
-//         $lookup: {
-//           from: categoryProductModel.CATEGORY_PRODUCT_COLLECTION_NAME,
-//           let: { catId: '$_id' },
-//           pipeline: [
-//             {
-//               $match: {
-//                 $expr: {
-//                   $eq: [
-//                     {
-//                       $cond: [
-//                         { $eq: [{ $type: '$category_id' }, 'objectId'] },
-//                         '$category_id',
-//                         { $toObjectId: '$category_id' }
-//                       ]
-//                     },
-//                     '$$catId'
-//                   ]
-//                 },
-//                 deleted: { $ne: true }
-//               }
-//             },
-//             { $sort: { position: 1 } }
-//           ],
-//           as: 'product_links'
-//         }
-//       },
-
-//       // 3. Lookup sang products để lấy thông tin đầy đủ
-//       {
-//         $lookup: {
-//           from: PRODUCT_COLLECTION_NAME,
-//           let: { productIds: '$product_links.product_id' },
-//           pipeline: [
-//             {
-//               $match: {
-//                 $expr: {
-//                   $in: [
-//                     {
-//                       $cond: [
-//                         { $eq: [{ $type: '$_id' }, 'objectId'] },
-//                         { $toString: '$_id' },
-//                         '$_id'
-//                       ]
-//                     },
-//                     '$$productIds'
-//                   ]
-//                 },
-//                 deleted: false,
-//                 status: PRODUCT_STATUSES.ACTIVE
-//               }
-//             },
-//             { $limit: limit }
-//           ],
-//           as: 'products'
-//         }
-//       },
-
-//       // 4. Project chỉ lấy field cần thiết
-//       {
-//         $project: {
-//           title: 1,
-//           slug: 1,
-//           description: 1,
-//           bannerImage: 1,
-//           badgeText: 1,
-//           thumbnail: 1,
-//           products: {
-//             _id: 1,
-//             title: 1,
-//             slug: 1,
-//             thumbnail: 1,
-//             price: 1,
-//             originalPrice: 1,
-//             discountPercentage: 1,
-//             stock: 1,
-//             unit: 1,
-//             featured: 1,
-//             ratings: 1
-//           }
-//         }
-//       }
-//     ]).toArray()
-
-//     return result[0] || null
-//   } catch (error) {
-//     throw new Error(error)
-//   }
-// }
-
-/**
- * Lấy position lớn nhất hiện tại (dùng để auto-set position = max + 1 khi tạo mới)
- */
+ * Lấy position lớn nhất hiện tại (dùng để auto-set position = max + 1 khi tạo mới) */
 const getMaxPosition = async () => {
   try {
     const result = await GET_DB()
@@ -970,10 +866,12 @@ const updateManyStatus = async (ids = [], status = PRODUCT_STATUSES.ACTIVE) => {
       .map((id) => new ObjectId(id));
     if (!objectIds.length) return { matchedCount: 0, modifiedCount: 0 };
 
-    return await GET_DB().collection(PRODUCT_COLLECTION_NAME).updateMany(
-      { _id: { $in: objectIds } },
-      { $set: { status, updatedAt: new Date() } }
-    );
+    return await GET_DB()
+      .collection(PRODUCT_COLLECTION_NAME)
+      .updateMany(
+        { _id: { $in: objectIds } },
+        { $set: { status, updatedAt: new Date() } },
+      );
   } catch (error) {
     throw new Error(error);
   }
@@ -991,13 +889,15 @@ const softDeleteMany = async (ids = [], actorId, actorEmail) => {
       deletedAt: new Date(),
     };
     if (actorId && actorEmail) {
-      updateData.deletedBy = { account_id: new ObjectId(actorId), email: actorEmail };
+      updateData.deletedBy = {
+        account_id: new ObjectId(actorId),
+        email: actorEmail,
+      };
     }
 
-    return await GET_DB().collection(PRODUCT_COLLECTION_NAME).updateMany(
-      { _id: { $in: objectIds } },
-      { $set: updateData }
-    );
+    return await GET_DB()
+      .collection(PRODUCT_COLLECTION_NAME)
+      .updateMany({ _id: { $in: objectIds } }, { $set: updateData });
   } catch (error) {
     throw new Error(error);
   }

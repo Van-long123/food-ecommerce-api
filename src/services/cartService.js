@@ -5,8 +5,7 @@ import { productModel } from '~/models/productModel'
 
 /**
  * Xây dựng danh sách sản phẩm để lưu vào database
- * Giữ nguyên ngày thêm sản phẩm (addedAt) nếu sản phẩm đã tồn tại trong giỏ hàng
- */
+ * Giữ nguyên ngày thêm sản phẩm (addedAt) nếu sản phẩm đã tồn tại trong giỏ hàng */
 const buildPersistItems = (normalizedItems, existingItems) => {
   const existingMap = new Map(
     (existingItems || []).map((item) => [String(item.productId || ''), item])
@@ -23,8 +22,7 @@ const buildPersistItems = (normalizedItems, existingItems) => {
  * Chuẩn hóa các sản phẩm trong giỏ hàng:
  * - Kiểm tra sự tồn tại và trạng thái của sản phẩm
  * - Xử lý trường hợp hết hàng hoặc vượt quá số lượng tồn kho
- * - Lưu lại các thay đổi (adjustments) để thông báo cho người dùng
- */
+ * - Lưu lại các thay đổi (adjustments) để thông báo cho người dùng */
 const normalizeCartItems = async (items = [], options = {}) => {
   const { userId = null, persist = false } = options
 
@@ -107,8 +105,7 @@ const normalizeCartItems = async (items = [], options = {}) => {
 }
 
 /**
- * Xây dựng cấu trúc phản hồi cho client bao gồm tổng số lượng và các điều chỉnh
- */
+ * Xây dựng cấu trúc phản hồi cho client bao gồm tổng số lượng và các điều chỉnh */
 const buildCartResponse = (items, adjustments) => {
   const totalCartItems = items.length
   const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0)
@@ -122,8 +119,7 @@ const buildCartResponse = (items, adjustments) => {
 }
 
 /**
- * Lấy giỏ hàng của người dùng theo userId
- */
+ * Lấy giỏ hàng của người dùng theo userId */
 const getCart = async (userId) => {
   const cart = await cartModel.findByUserId(userId)
   const rawItems = Array.isArray(cart?.items) ? cart.items : []
@@ -135,8 +131,7 @@ const getCart = async (userId) => {
 }
 
 /**
- * Thêm sản phẩm vào giỏ hàng
- */
+ * Thêm sản phẩm vào giỏ hàng */
 const addItem = async (userId, payload) => {
   const productId = String(payload.productId || '')
   const quantity = Math.max(1, Number(payload.quantity || 1))
@@ -188,8 +183,7 @@ const addItem = async (userId, payload) => {
 }
 
 /**
- * Cập nhật số lượng của một sản phẩm trong giỏ hàng
- */
+ * Cập nhật số lượng của một sản phẩm trong giỏ hàng */
 const updateItemQuantity = async (userId, productId, quantity) => {
   const cart = await cartModel.findByUserId(userId)
   const rawItems = Array.isArray(cart?.items) ? cart.items : []
@@ -221,8 +215,7 @@ const updateItemQuantity = async (userId, productId, quantity) => {
 }
 
 /**
- * Xóa một sản phẩm khỏi giỏ hàng
- */
+ * Xóa một sản phẩm khỏi giỏ hàng */
 const removeItem = async (userId, productId) => {
   const cart = await cartModel.findByUserId(userId)
   const rawItems = Array.isArray(cart?.items) ? cart.items : []
@@ -233,8 +226,7 @@ const removeItem = async (userId, productId) => {
 }
 
 /**
- * Xóa nhiều sản phẩm khỏi giỏ hàng (thường dùng sau khi đặt hàng thành công)
- */
+ * Xóa nhiều sản phẩm khỏi giỏ hàng (thường dùng sau khi đặt hàng thành công) */
 const removeItems = async (userId, productIds = []) => {
   const removeSet = new Set(productIds.map((id) => String(id)))
   const cart = await cartModel.findByUserId(userId)
@@ -246,8 +238,7 @@ const removeItems = async (userId, productIds = []) => {
 }
 
 /**
- * Hợp nhất giỏ hàng của khách (guest) vào giỏ hàng của người dùng khi đăng nhập
- */
+ * Hợp nhất giỏ hàng của khách (guest) vào giỏ hàng của người dùng khi đăng nhập */
 const mergeGuestCart = async (userId, guestItems = []) => {
   const cart = await cartModel.findByUserId(userId)
   const rawItems = Array.isArray(cart?.items) ? cart.items : []
@@ -284,8 +275,7 @@ const mergeGuestCart = async (userId, guestItems = []) => {
 }
 
 /**
- * Kiểm tra và chuẩn hóa giỏ hàng cho khách (không lưu vào DB)
- */
+ * Kiểm tra và chuẩn hóa giỏ hàng cho khách (không lưu vào DB) */
 const validateGuestCart = async (guestItems = []) => {
   const cleaned = guestItems.map((item) => ({
     productId: String(item.productId || ''),

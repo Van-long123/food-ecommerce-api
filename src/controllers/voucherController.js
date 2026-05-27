@@ -1,7 +1,7 @@
 import { StatusCodes } from 'http-status-codes'
 import { voucherService } from '~/services/voucherService'
 
-// ─── CLIENT ───────────────────────────────────────────────────────────────────
+// CLIENT
 
 const getListClient = async (req, res, next) => {
   try {
@@ -19,7 +19,7 @@ const validateVoucher = async (req, res, next) => {
   } catch (error) { next(error) }
 }
 
-// ─── ADMIN ────────────────────────────────────────────────────────────────────
+// ADMIN
 
 const getListAdmin = async (req, res, next) => {
   try {

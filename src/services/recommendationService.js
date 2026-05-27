@@ -16,8 +16,7 @@ const BASE_URL = env.RECOMMENDATION_SERVICE_URL || 'http://localhost:8000'
  *     { _id, title, slug, price, images, ratings, primary_category_id,
  *       featured, isBestPrice, isOnlineExclusive, similarity_score }
  *   ]
- * }
- */
+ * } */
 const getRecommendations = async (productId, { limit = 8, categoryBoost = true } = {}) => {
   const url = new URL('/api/product-recommendation', BASE_URL)
   url.searchParams.set('product_id', productId)

@@ -175,15 +175,15 @@ const getHomeAggregate = async (queryParams = {}) => {
 }
 
 // const getLandingPageData = async () => {
-//   return getHomeAggregate({
-//     campaignLimit: DEFAULT_LIMITS.campaign,
-//     categoryLimit: DEFAULT_LIMITS.category,
-//     categoryProductLimit: DEFAULT_LIMITS.categoryProduct,
-//     blogLimit: DEFAULT_LIMITS.blog,
-//     includeCampaigns: true,
-//     includeCategories: true,
-//     includeBlogs: true
-//   })
+// return getHomeAggregate({
+// campaignLimit: DEFAULT_LIMITS.campaign,
+// categoryLimit: DEFAULT_LIMITS.category,
+// categoryProductLimit: DEFAULT_LIMITS.categoryProduct,
+// blogLimit: DEFAULT_LIMITS.blog,
+// includeCampaigns: true,
+// includeCategories: true,
+// includeBlogs: true
+// })
 // }
 
 const getCampaignProductsBySlug = async (slug, { page = 1, limit = 30 }) => {

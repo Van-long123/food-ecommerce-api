@@ -12,7 +12,7 @@ import { userModel } from "~/models/userModel";
 import { sendMail } from "~/utils/sendMail";
 import { getOrderShippingTemplate } from "~/templates/emailTemplates";
 
-// ── Luồng trạng thái hợp lệ (dùng chung cho Admin update)
+// Luồng trạng thái hợp lệ (dùng chung cho Admin update)
 const ALLOWED_STATUS_TRANSITIONS = {
   pending: ["confirmed", "cancelled"],
   confirmed: ["processing", "cancelled"],
@@ -23,10 +23,9 @@ const ALLOWED_STATUS_TRANSITIONS = {
   returned: [],
 };
 
-//  CLIENT-SIDE FUNCTIONS
+// CLIENT-SIDE FUNCTIONS
 /**
- * Kiểm tra tồn kho thực tế trước khi checkout
- */
+ * Kiểm tra tồn kho thực tế trước khi checkout */
 const validateStockBeforeCheckout = async (items = []) => {
   try {
     const productIds = Array.from(
@@ -300,8 +299,7 @@ const cancelOrder = async (orderId, userId, payload = {}) => {
 };
 
 /**
- * Xác nhận đã nhận hàng (client) — mở khóa tính năng đánh giá sản phẩm.
- */
+ * Xác nhận đã nhận hàng (client) — mở khóa tính năng đánh giá sản phẩm. */
 const confirmReceived = async (orderId, userId) => {
   const session = GET_CLIENT().startSession();
   try {
@@ -352,10 +350,9 @@ const confirmReceived = async (orderId, userId) => {
   }
 };
 
-//  ADMIN-SIDE FUNCTIONS
+// ADMIN-SIDE FUNCTIONS
 /**
- * Lấy danh sách đơn hàng cho Admin với phân trang, tìm kiếm, lọc, sắp xếp.
- */
+ * Lấy danh sách đơn hàng cho Admin với phân trang, tìm kiếm, lọc, sắp xếp. */
 const getAdminOrders = async ({
   page = 1,
   perPage = 10,
@@ -404,8 +401,7 @@ const getAdminOrders = async ({
 
 /**
  * Lấy chi tiết đơn hàng cho Admin (không ràng buộc userId).
- * Tái sử dụng nội bộ bởi updateAdminOrderStatus và confirmCodPayment.
- */
+ * Tái sử dụng nội bộ bởi updateAdminOrderStatus và confirmCodPayment. */
 const getAdminOrderDetail = async (orderId, session) => {
   try {
     const order = await orderModel.getAdminOrderDetail(orderId, { session });
@@ -507,8 +503,7 @@ const updateAdminOrderStatusInternal = async (
 
 /**
  * Admin cập nhật trạng thái đơn hàng.
- * Tự động xử lý: hoàn kho, hủy/hoàn payment, khôi phục voucher, tăng soldCount.
- */
+ * Tự động xử lý: hoàn kho, hủy/hoàn payment, khôi phục voucher, tăng soldCount. */
 const updateAdminOrderStatus = async (orderId, newStatus, adminId) => {
   const session = GET_CLIENT().startSession();
   try {
@@ -572,8 +567,7 @@ const bulkUpdateAdminOrderStatus = async (
 };
 
 /**
- * Lấy danh sách thanh toán cho Admin với phân trang, tìm kiếm, lọc.
- */
+ * Lấy danh sách thanh toán cho Admin với phân trang, tìm kiếm, lọc. */
 const getAdminPayments = async ({
   page = 1,
   perPage = 10,
@@ -616,8 +610,7 @@ const getAdminPayments = async ({
 
 /**
  * Admin xác nhận đã thu tiền COD → cập nhật payment + đơn hàng sang delivered.
- * Tái sử dụng getAdminOrderDetail để lấy items cho soldCount.
- */
+ * Tái sử dụng getAdminOrderDetail để lấy items cho soldCount. */
 const confirmCodPayment = async (paymentId, adminId) => {
   const session = GET_CLIENT().startSession();
   try {
@@ -676,8 +669,7 @@ const confirmCodPayment = async (paymentId, adminId) => {
 };
 
 /**
- * Thống kê nhanh trạng thái payment cho Admin Dashboard.
- */
+ * Thống kê nhanh trạng thái payment cho Admin Dashboard. */
 const getPaymentStats = async () => {
   try {
     const stats = await paymentModel.getPaymentStats();
@@ -694,14 +686,14 @@ const getPaymentStats = async () => {
 };
 
 export const orderService = {
-  // ── Client ──────────────────────────────────────────────────
+  // Client
   validateStockBeforeCheckout,
   createNew,
   getOrdersByUserId,
   getOrderDetails,
   cancelOrder,
   confirmReceived,
-  // ── Admin ───────────────────────────────────────────────────
+  // Admin
   getAdminOrders,
   getAdminOrderDetail,
   updateAdminOrderStatus,

@@ -8,7 +8,7 @@ import { slugify } from "~/utils/formatters";
 import { parseBool, parseNum } from "~/utils/parsers";
 import { CloudinaryProvider } from "~/providers/CloudinaryProvider";
 
-// ─── Helper: generate unique slug ─────────────────────────────────────────────
+// Helper: generate unique slug
 const generateUniqueSlug = async (title, providedSlug) => {
   const baseSlug = providedSlug ? slugify(providedSlug) : slugify(title);
   const existing = await articleModel.findOneBySlugAny(baseSlug);
@@ -18,8 +18,7 @@ const generateUniqueSlug = async (title, providedSlug) => {
 /**
  * Đồng bộ categories cho article:
  * - Upsert từng category_id vào category_articles
- * - Xác định isPrimary theo primary_category_id
- */
+ * - Xác định isPrimary theo primary_category_id */
 const syncCategories = async (
   articleId,
   categoryIds = [],
@@ -52,7 +51,7 @@ const syncCategories = async (
   await Promise.all(promises);
 };
 
-// ─── ADMIN: Create ────────────────────────────────────────────────────────────
+// ADMIN: Create
 const createNew = async (reqBody, actorId, files = null) => {
   try {
     const slug = await generateUniqueSlug(reqBody.title, reqBody.slug);
@@ -115,7 +114,7 @@ const createNew = async (reqBody, actorId, files = null) => {
   }
 };
 
-// ─── ADMIN: Get list ──────────────────────────────────────────────────────────
+// ADMIN: Get list
 const getListAdmin = async (query) => {
   try {
     const page = parseInt(query.page) || 1;
@@ -158,7 +157,7 @@ const getListAdmin = async (query) => {
   }
 };
 
-// ─── ADMIN: Get detail by ID ──────────────────────────────────────────────────
+// ADMIN: Get detail by ID
 const getDetailAdmin = async (id) => {
   try {
     const article = await articleModel.getDetails(id);
@@ -170,7 +169,7 @@ const getDetailAdmin = async (id) => {
   }
 };
 
-// ─── ADMIN: Update ────────────────────────────────────────────────────────────
+// ADMIN: Update
 const update = async (id, reqBody, actorId, files = null) => {
   try {
     const article = await articleModel.findOneById(id);
@@ -259,7 +258,7 @@ const update = async (id, reqBody, actorId, files = null) => {
   }
 };
 
-// ─── ADMIN: Thêm article vào một category ─────────────────────────────────────
+// ADMIN: Thêm article vào một category
 const addCategory = async (articleId, reqBody) => {
   try {
     const article = await articleModel.findOneById(articleId);
@@ -296,7 +295,7 @@ const addCategory = async (articleId, reqBody) => {
   }
 };
 
-// ─── ADMIN: Xóa article khỏi một category ─────────────────────────────────────
+// ADMIN: Xóa article khỏi một category
 const removeCategory = async (articleId, categoryId) => {
   try {
     const article = await articleModel.findOneById(articleId);
@@ -321,7 +320,7 @@ const removeCategory = async (articleId, categoryId) => {
   }
 };
 
-// ─── ADMIN: Soft Delete ───────────────────────────────────────────────────────
+// ADMIN: Soft Delete
 const softDelete = async (id, actorId) => {
   try {
     const article = await articleModel.findOneById(id);
@@ -386,7 +385,7 @@ const bulkDeleteAdmin = async ({ article_ids = [] }, actorId) => {
   }
 };
 
-// ─── CLIENT: Get list ─────────────────────────────────────────────────────────
+// CLIENT: Get list
 const getListClient = async (query) => {
   try {
     const page = parseInt(query.page) || 1;
@@ -427,7 +426,7 @@ const getListClient = async (query) => {
   }
 };
 
-// ─── CLIENT: Get detail by slug ───────────────────────────────────────────────
+// CLIENT: Get detail by slug
 const getDetailClient = async (slug) => {
   try {
     const article = await articleModel.getDetails(slug, true);

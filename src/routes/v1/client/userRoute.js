@@ -59,7 +59,7 @@ Router.get('/facebook/callback', (req, res, next) => {
   })(req, res, next)
 }, userController.socialAuthCallback)
 
-// ── Verify OAuth ─────────────────────────────────────────────
+// Verify OAuth
 // FE POST { userId } để nhận thông tin user đã đăng nhập qua OAuth
 Router.route('/verify-oauth')
   .post(userController.verifyOAuth)

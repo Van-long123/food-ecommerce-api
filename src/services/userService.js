@@ -16,8 +16,7 @@ const ADMIN_RESET_PASSWORD_TOKEN_LIFE = 1000 * 60 * 60 * 24
 
 /**
  * Lấy danh sách ID của các vai trò hệ thống (System Roles) từ biến môi trường.
- * Các ID này đại diện cho những quyền quản trị tối cao không thể xóa sửa.
- */
+ * Các ID này đại diện cho những quyền quản trị tối cao không thể xóa sửa. */
 const getSystemRoleIds = () => {
   const raw = String(env.SYSTEM_ROLE_IDS || '')
   return raw
@@ -29,8 +28,7 @@ const getSystemRoleIds = () => {
 /**
  * Phân giải và xác định loại tài khoản (role string: 'admin' hoặc 'client') dựa trên dữ liệu đầu vào.
  * Ưu tiên lấy trực tiếp trường 'role' nếu có. Nếu không, dựa vào 'roleId' để kiểm tra xem
- * vai trò đó có thuộc System Roles hoặc được đánh dấu 'isSystem' trong DB hay không.
- */
+ * vai trò đó có thuộc System Roles hoặc được đánh dấu 'isSystem' trong DB hay không. */
 const resolveUserRole = async (payload = {}) => {
   if (payload.role && ['admin', 'client'].includes(payload.role)) {
     return payload.role
@@ -51,8 +49,7 @@ const resolveUserRole = async (payload = {}) => {
 
 /**
  * Loại bỏ các trường dữ liệu nhạy cảm (mật khẩu, token) ra khỏi object user
- * trước khi trả dữ liệu về cho Frontend, đảm bảo bảo mật thông tin người dùng.
- */
+ * trước khi trả dữ liệu về cho Frontend, đảm bảo bảo mật thông tin người dùng. */
 const sanitizeUser = (user) => {
   if (!user) return null
   const cloned = { ...user }
@@ -240,7 +237,7 @@ const createNew = async (reqBody) => {
       <td align="center">
         <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;">
 
-          <!-- ── LOGO HEADER ── -->
+          <!-- LOGO HEADER -->
           <tr>
             <td align="center" style="padding-bottom:24px;">
               <table cellpadding="0" cellspacing="0" border="0">
@@ -264,7 +261,7 @@ const createNew = async (reqBody) => {
             </td>
           </tr>
 
-          <!-- ── MAIN CARD ── -->
+          <!-- MAIN CARD -->
           <tr>
             <td style="
               background:#ffffff;
@@ -470,7 +467,7 @@ const createNew = async (reqBody) => {
             </td>
           </tr>
 
-          <!-- ── FOOTER ── -->
+          <!-- FOOTER -->
           <tr>
             <td style="
               background:#1F2937;
@@ -1010,10 +1007,8 @@ const socialAuthCallback = async (socialProfile) => {
   }
 }
 
-// ──────────────────────────────────────────────────────────────
-// Verify OAuth — FE gọi sau khi landing trên trang login-success
+// // Verify OAuth — FE gọi sau khi landing trên trang login-success
 // để xác nhận user đã được tạo/đăng nhập thành công
-// ──────────────────────────────────────────────────────────────
 const verifyOAuth = async (reqBody) => {
   try {
     const { userId } = reqBody
@@ -1030,7 +1025,7 @@ const verifyOAuth = async (reqBody) => {
   }
 }
 
-// ─── ADMIN ────────────────────────────────────────────────────────────────
+// ADMIN
 
 const getListAdmin = async (query) => {
   try {

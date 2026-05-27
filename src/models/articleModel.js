@@ -136,8 +136,7 @@ const findOneBySlugAny = async (slug) => {
  *  - primary_category: category chính (lookup bằng primary_category_id)
  *  - categories: tất cả categories mà article thuộc về (qua category_articles)
  *
- * Giống boardModel.getDetails() — aggregate + nhiều $lookup stage.
- */
+ * Giống boardModel.getDetails() — aggregate + nhiều $lookup stage. */
 const getDetails = async (identifier, bySlug = false) => {
   try {
     const matchCondition = bySlug
@@ -304,8 +303,7 @@ const getDetails = async (identifier, bySlug = false) => {
 };
 
 /**
- * Danh sách articles với $facet — giống boardModel.getBoards().
- */
+ * Danh sách articles với $facet — giống boardModel.getBoards(). */
 const getList = async ({
   queryConditions = [],
   categoryId = null,

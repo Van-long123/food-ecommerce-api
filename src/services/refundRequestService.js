@@ -44,7 +44,7 @@ const ensureRefundableOrder = (order) => {
   }
 };
 
-//  chuẩn hóa danh sách sản phẩm yêu cầu hoàn tiền và tính toán tổng số tiền cần hoàn
+// chuẩn hóa danh sách sản phẩm yêu cầu hoàn tiền và tính toán tổng số tiền cần hoàn
 const buildRefundItems = (order, requestedItems = []) => {
   const orderItems = order.items || [];
   if (!Array.isArray(requestedItems) || requestedItems.length === 0) {
@@ -108,7 +108,7 @@ const buildRefundItems = (order, requestedItems = []) => {
     isFullRefund = false;
   }
 
-  //  Tính tổng tiền hàng được yêu cầu trả
+  // Tính tổng tiền hàng được yêu cầu trả
   const itemsAmount = refundItems.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0,

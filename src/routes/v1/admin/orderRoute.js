@@ -4,7 +4,7 @@ import { orderValidation } from '~/validations/orderValidation'
 
 const Router = express.Router()
 
-// ── Orders ────────────────────────────────────────────────────
+// Orders
 Router.get('/', orderController.getOrders)
 Router.put('/bulk-status', orderValidation.adminBulkStatus, orderController.bulkUpdateOrderStatus)
 Router.get('/:id', orderController.getOrderDetailAdmin)

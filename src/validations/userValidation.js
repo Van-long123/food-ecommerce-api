@@ -142,7 +142,7 @@ const setPassword = async (req, res, next) => {
   }
 }
 
-// ─── ADMIN ────────────────────────────────────────────────────────────────
+// ADMIN
 const adminCreate = async (req, res, next) => {
   const schema = Joi.object({
     email: Joi.string().required().pattern(EMAIL_RULE).message(EMAIL_RULE_MESSAGE),

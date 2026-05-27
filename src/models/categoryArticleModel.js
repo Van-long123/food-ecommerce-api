@@ -16,8 +16,7 @@ const validateBeforeCreate = async (data) => {
 };
 
 /**
- * Upsert: nếu đã tồn tại (article_id + category_id) thì update, chưa có thì insert
- */
+ * Upsert: nếu đã tồn tại (article_id + category_id) thì update, chưa có thì insert */
 const upsert = async ({ article_id, category_id }) => {
   try {
     const filter = {
@@ -42,8 +41,7 @@ const upsert = async ({ article_id, category_id }) => {
 };
 
 /**
- * Xóa một mapping cụ thể
- */
+ * Xóa một mapping cụ thể */
 const removeOne = async ({ article_id, category_id }) => {
   try {
     return await GET_DB()
@@ -58,8 +56,7 @@ const removeOne = async ({ article_id, category_id }) => {
 };
 
 /**
- * Xóa tất cả categories của một article (dùng khi soft-delete article)
- */
+ * Xóa tất cả categories của một article (dùng khi soft-delete article) */
 const deleteAllByArticleId = async (article_id) => {
   try {
     return await GET_DB()
@@ -71,8 +68,7 @@ const deleteAllByArticleId = async (article_id) => {
 };
 
 /**
- * Lấy tất cả category_ids của một article
- */
+ * Lấy tất cả category_ids của một article */
 const findAllByArticleId = async (article_id) => {
   try {
     return await GET_DB()
@@ -87,8 +83,7 @@ const findAllByArticleId = async (article_id) => {
 /**
  * Đồng bộ lại danh sách categories cho article:
  * - Xóa hết mappings cũ không còn trong categoryIds mới
- * - Upsert các mapping mới/cập nhật
- */
+ * - Upsert các mapping mới/cập nhật */
 const syncByArticleId = async (article_id, categoryIds = []) => {
   try {
     const aId = new ObjectId(article_id);

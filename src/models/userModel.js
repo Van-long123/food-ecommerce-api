@@ -42,7 +42,7 @@ const USER_COLLECTION_SCHEMA = Joi.object({
     .timestamp("javascript")
     .allow(null)
     .default(null),
-  // ── Social Auth Fields ────────────────────────────────────────
+  // Social Auth Fields
   // provider chính của tài khoản: 'local' | 'google' | 'facebook'
   provider: Joi.string()
     .valid(...Object.values(AUTH_PROVIDERS))
@@ -320,8 +320,7 @@ const updateManyStatus = async (ids = [], isActive = false) => {
 };
 
 /**
- * Tìm user theo socialId + provider (dùng cho OAuth callback)
- */
+ * Tìm user theo socialId + provider (dùng cho OAuth callback) */
 const findOneBySocialId = async (provider, socialId) => {
   try {
     const result = await GET_DB()
@@ -338,8 +337,7 @@ const findOneBySocialId = async (provider, socialId) => {
 /**
  * Tạo mới user từ social profile (Google / Facebook)
  * Nếu email đã tồn tại → liên kết social account vào user đó (link provider)
- * Nếu chưa tồn tại → tạo user mới và đánh dấu isActive = true ngay lập tức
- */
+ * Nếu chưa tồn tại → tạo user mới và đánh dấu isActive = true ngay lập tức */
 const upsertSocialUser = async ({
   email,
   displayName,

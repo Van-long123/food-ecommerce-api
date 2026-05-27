@@ -7,7 +7,7 @@ import { slugify } from '~/utils/formatters'
 import { CloudinaryProvider } from '~/providers/CloudinaryProvider'
 import { parseBool, parseNum, parsePositiveInt, toNumberOrNull } from '~/utils/parsers'
 
-// ─── Helper: generate unique slug ─────────────────────────────────────────────
+// Helper: generate unique slug
 const generateUniqueSlug = async (title, providedSlug) => {
   const baseSlug = providedSlug ? slugify(providedSlug) : slugify(title)
   const existing = await categoryModel.findOneBySlugAny(baseSlug)
@@ -36,7 +36,7 @@ const uploadCategoryField = async (files, fieldName, existingValue = '') => {
   return existingValue
 }
 
-// ─── ADMIN: Create ────────────────────────────────────────────────────────────
+// ADMIN: Create
 const createNew = async (reqBody, actorId, files = null) => {
   try {
     const slug = await generateUniqueSlug(reqBody.title, reqBody.slug)
@@ -82,7 +82,7 @@ const createNew = async (reqBody, actorId, files = null) => {
   }
 }
 
-// ─── ADMIN: Get list — dùng aggregate + $facet từ model ───────────────────────
+// ADMIN: Get list — dùng aggregate + $facet từ model
 const getListAdmin = async (query) => {
   try {
     const page = parseInt(query.page) || 1
@@ -119,7 +119,7 @@ const getListAdmin = async (query) => {
   }
 }
 
-// ─── ADMIN: Get detail by ID ──────────────────────────────────────────────────
+// ADMIN: Get detail by ID
 const getDetailAdmin = async (id) => {
   try {
     const category = await categoryModel.findOneById(id)
@@ -140,7 +140,7 @@ const getDetailAdmin = async (id) => {
   }
 }
 
-// ─── ADMIN: Update ────────────────────────────────────────────────────────────
+// ADMIN: Update
 const update = async (id, reqBody, actorId, files = null) => {
   try {
     const category = await categoryModel.findOneById(id)
@@ -186,7 +186,7 @@ const update = async (id, reqBody, actorId, files = null) => {
   }
 }
 
-// ─── ADMIN: Soft Delete ───────────────────────────────────────────────────────
+// ADMIN: Soft Delete
 const softDelete = async (id, actorId) => {
   try {
     const category = await categoryModel.findOneById(id)
@@ -222,7 +222,7 @@ const bulkDeleteAdmin = async (reqBody, actorId) => {
   }
 }
 
-// ─── CLIENT: Get list (active only) ──────────────────────────────────────────
+// CLIENT: Get list (active only)
 const getListClient = async (query) => {
   try {
     const page = parseInt(query.page) || 1
@@ -244,7 +244,7 @@ const getListClient = async (query) => {
   }
 }
 
-// ─── CLIENT: Get detail by slug (includes parent info via aggregate) ───────────
+// CLIENT: Get detail by slug (includes parent info via aggregate)
 const getDetailClient = async (slug) => {
   try {
     const category = await categoryModel.findOneBySlug(slug)
@@ -255,7 +255,7 @@ const getDetailClient = async (slug) => {
   }
 }
 
-// ─── CLIENT: Category Products Page ───────────────────────────────────────────
+// CLIENT: Category Products Page
 const getProductsClient = async (slug, query = {}) => {
   try {
     const category = await categoryModel.findOneBySlug(slug)

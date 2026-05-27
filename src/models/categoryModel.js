@@ -141,8 +141,7 @@ const findOneBySlugAny = async (slug) => {
 
 /**
  * Lấy danh sách categories kèm thông tin parent (nếu có) bằng $lookup.
- * Dùng $facet để lấy data và count trong một truy vấn duy nhất — giống boardModel.getBoards().
- */
+ * Dùng $facet để lấy data và count trong một truy vấn duy nhất — giống boardModel.getBoards(). */
 const getList = async ({
   queryConditions = [],
   page = 1,
@@ -196,8 +195,7 @@ const getList = async ({
 };
 
 /**
- * Lấy toàn bộ categories không phân trang (dùng cho menu, home page)
- */
+ * Lấy toàn bộ categories không phân trang (dùng cho menu, home page) */
 const getAll = async (filter = {}) => {
   try {
     return await GET_DB()
@@ -213,8 +211,7 @@ const getAll = async (filter = {}) => {
 /**
  * [OPTIMIZED — Home Page]
  * Giống getAll() nhưng với LEAN PROJECTION — chỉ lấy fields cần thiết cho menu.
- * Loại bỏ audit trail (createdBy, updatedBy, deletedBy) và các heavy fields.
- */
+ * Loại bỏ audit trail (createdBy, updatedBy, deletedBy) và các heavy fields. */
 const getAllForMenu = async (filter = {}) => {
   try {
     return await GET_DB()

@@ -196,8 +196,7 @@ const softDelete = async (id, actorId, actorEmail) => {
 };
 
 /**
- * Danh sách vouchers với $facet pagination
- */
+ * Danh sách vouchers với $facet pagination */
 const getList = async ({
   queryConditions = [],
   page = 1,

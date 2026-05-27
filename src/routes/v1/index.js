@@ -7,15 +7,15 @@ const router = express.Router()
 
 
 
-// ─── Client (Public) ──────────────────────────────────────────────────────────
+// Client (Public)
 // Prefix: /v1/client/...
 router.use('/client', clientRouter)
 
-// ─── Admin (Protected: isAuthorized + isAdmin) ────────────────────────────────
+// Admin (Protected: isAuthorized + isAdmin)
 // Prefix: /v1/admin/...
 router.use('/admin', adminRouter)
 
-// ─── Upload (Protected: isAuthorized + isAdmin) ─────────────────────────────
+// Upload (Protected: isAuthorized + isAdmin)
 // Prefix: /v1/upload/...
 router.use('/upload', uploadRoute)
 

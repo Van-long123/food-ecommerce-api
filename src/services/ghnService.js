@@ -58,8 +58,7 @@ const getWards = async (districtId) => {
 
 /**
  * Lấy danh sách dịch vụ vận chuyển khả dụng giữa 2 quận.
- * Trả về service có short_name = 'Nhanh'
- */
+ * Trả về service có short_name = 'Nhanh' */
 const getAvailableServices = async (fromDistrictId, toDistrictId) => {
   const body = {
     shop_id: Number(env.GHN_SHOP_ID),

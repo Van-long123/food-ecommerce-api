@@ -51,8 +51,7 @@ const isAuthorizedOptional = async (req, res, next) => {
 
 /**
  * Kiểm tra quyền Admin — phải dùng sau isAuthorized
- * Lấy role từ DB để tránh role bị giả mạo trong token.
- */
+ * Lấy role từ DB để tránh role bị giả mạo trong token. */
 const isAdmin = async (req, res, next) => {
   try {
     const userId = req.jwtDecoded?._id

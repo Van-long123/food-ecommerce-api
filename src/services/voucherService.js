@@ -120,12 +120,11 @@ const normalizeVoucherUpdatePayload = (reqBody) => {
   return updateData;
 };
 
-// ─── CLIENT ───────────────────────────────────────────────────────────────────
+// CLIENT
 
 /**
  * Danh sách vouchers active cho client xem (không cần đăng nhập)
- * Query params: type, isFeatured, page, limit
- */
+ * Query params: type, isFeatured, page, limit */
 const getListClient = async (query, accountId = null) => {
   const page = parsePositiveInt(query.page, 1);
   const limit = parsePositiveInt(query.limit, 100);
@@ -181,8 +180,7 @@ const getListClient = async (query, accountId = null) => {
 
 /**
  * Validate mã giảm giá
- * Body: { code, orderValue, items, shippingFee }
- */
+ * Body: { code, orderValue, items, shippingFee } */
 const validateVoucher = async (
   { code, orderValue, items = [], shippingFee = 0 },
   accountId = null,
@@ -193,7 +191,7 @@ const validateVoucher = async (
   );
 };
 
-// ─── ADMIN ────────────────────────────────────────────────────────────────────
+// ADMIN
 
 const getListAdmin = async (query) => {
   const page = parsePositiveInt(query.page, 1);

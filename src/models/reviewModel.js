@@ -175,9 +175,9 @@ const getAdminList = async ({
         // phải nằm sau bước $lookup vì nó cần tìm kiếm dựa trên product.title và user.displayName đã được join vào.
         ...(keywordMatchStage ? [keywordMatchStage] : []),
         {
-          //  $facet cho phép chạy nhiều pipeline song song trên cùng một tập dữ liệu
+          // $facet cho phép chạy nhiều pipeline song song trên cùng một tập dữ liệu
           $facet: {
-            //  Luồng chính để lấy danh sách hiển thị.
+            // Luồng chính để lấy danh sách hiển thị.
             queryData: [
               ...(ratingMatchStage ? [ratingMatchStage] : []),
               { $sort: sort },
@@ -203,7 +203,7 @@ const getAdminList = async ({
               ...(ratingMatchStage ? [ratingMatchStage] : []),
               { $count: "count" },
             ],
-            //  Luồng này dùng $group để gom nhóm các rating giống nhau và tính tổng
+            // Luồng này dùng $group để gom nhóm các rating giống nhau và tính tổng
             ratingStats: [
               {
                 $group: {

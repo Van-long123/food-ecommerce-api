@@ -26,8 +26,7 @@ import axios from "axios";
  * Tính phí vận chuyển cho địa chỉ được chọn.
  * 1. Tìm address theo addressId và xác minh thuộc về userId
  * 2. Gọi GHN available-services để lấy service Nhanh
- * 3. Gọi GHN fee API với district_id và ward_code của địa chỉ
- */
+ * 3. Gọi GHN fee API với district_id và ward_code của địa chỉ */
 const getShippingFee = async (userId, addressId, products = []) => {
   // 1. Tìm và xác minh địa chỉ
   const address = await addressModel.findOneById(addressId);
@@ -353,8 +352,7 @@ const PAYOS_API_URL = "https://api-merchant.payos.vn/v2/payment-requests";
  * Logic giống 100% createCodCheckout, nhưng:
  *  - Gọi PayOS API để lấy checkoutUrl
  *  - Lưu paymentUrl vào bản ghi payment
- *  - Trả về { checkoutUrl } để FE redirect
- */
+ *  - Trả về { checkoutUrl } để FE redirect */
 const createPayOSCheckout = async (userId, payload) => {
   const {
     addressId,
@@ -626,8 +624,7 @@ const createPayOSCheckout = async (userId, payload) => {
  * 1. Xác thực chữ ký số bằng HMAC-SHA256
  * 2. Kiểm tra giao dịch thành công (code === '00')
  * 3. Cập nhật order status → confirmed, payment status → completed
- * 4. Gửi email hóa đơn cho khách hàng
- */
+ * 4. Gửi email hóa đơn cho khách hàng */
 const handlePayOSWebhook = async (body) => {
   const { data: webhookData, signature: webhookSignature } = body;
 

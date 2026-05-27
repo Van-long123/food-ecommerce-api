@@ -170,7 +170,7 @@ const verifyOAuth = async (req, res, next) => {
   }
 }
 
-// ─── ADMIN ────────────────────────────────────────────────────────────────
+// ADMIN
 const getListAdmin = async (req, res, next) => {
   try {
     const result = await userService.getListAdmin(req.query)
