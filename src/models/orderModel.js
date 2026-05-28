@@ -1,4 +1,4 @@
-  import Joi from "joi";
+import Joi from "joi";
 import { ObjectId } from "mongodb";
 import { GET_DB } from "~/config/mongodb";
 
@@ -198,6 +198,48 @@ const findByOrderCode = async (orderCode) => {
     return await GET_DB()
       .collection(ORDER_COLLECTION_NAME)
       .findOne({ orderCode: Number(orderCode) });
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+//  tìm ra danh sách các đơn hàng thanh toán qua PayOS đã quá hạn (mặc định là quá 30 phút) nhưng vẫn chưa hoàn tất thanh toán.
+const findPendingPayOSOrdersOlderThan = async (olderThanMinutes = 30) => {
+  try {
+    const cutoffDate = new Date(Date.now() - olderThanMinutes * 60 * 1000);
+
+    return await GET_DB()
+      .collection(ORDER_COLLECTION_NAME)
+      .aggregate([
+        {
+          $match: {
+            status: "pending",
+            createdAt: { $lte: cutoffDate },
+          },
+        },
+        {
+          $lookup: {
+            from: "order_items",
+            localField: "_id",
+            foreignField: "orderId",
+            as: "items",
+          },
+        },
+        {
+          $lookup: {
+            from: "payments",
+            localField: "_id",
+            foreignField: "orderId",
+            as: "payment",
+          },
+        },
+        {
+          $match: {
+            "payment.0.paymentMethod": "PayOS",
+            "payment.0.status": "pending",
+          },
+        },
+      ])
+      .toArray();
   } catch (error) {
     throw new Error(error);
   }
@@ -410,6 +452,7 @@ export const orderModel = {
   updateStatusWithDeliveredAt,
   findShippingOrdersOlderThan,
   findByOrderCode,
+  findPendingPayOSOrdersOlderThan,
   listDeliveredOrderIdsByProduct,
   getAdminOrders,
   countAdminOrders,

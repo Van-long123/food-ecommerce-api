@@ -15,8 +15,10 @@ const PAYMENT_COLLECTION_SCHEMA = Joi.object({
     .default("pending"),
 
   // PayOS specific fields
+  payosOrderId: Joi.string().allow("", null).optional(),
   transactionId: Joi.string().allow("").optional(), // ID từ phía provider
   paymentUrl: Joi.string().allow("").optional(), // URL thanh toán (cho QR hoặc Redirect)
+  expiresAt: Joi.date().allow(null).optional(),
   rawResponse: Joi.object().optional(), // Lưu toàn bộ log từ provider trả về
 
   createdAt: Joi.date().default(() => new Date()),
@@ -77,6 +79,38 @@ const updateStatusByOrderId = async (orderId, status, options = {}) => {
         { $set: { status, updatedAt: new Date() } },
         options,
       );
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const updateByOrderId = async (orderId, updateData = {}, options = {}) => {
+  try {
+    return await GET_DB()
+      .collection(PAYMENT_COLLECTION_NAME)
+      .findOneAndUpdate(
+        { orderId: new ObjectId(orderId) },
+        { $set: { ...updateData, updatedAt: new Date() } },
+        { returnDocument: "after", ...options },
+      );
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+const findByOrderId = async (orderId, options = {}) => {
+  try {
+    const { session, ...mongoOptions } = options;
+    const collection = GET_DB().collection(PAYMENT_COLLECTION_NAME);
+    return session
+      ? await collection.findOne(
+          { orderId: new ObjectId(orderId) },
+          { session, ...mongoOptions },
+        )
+      : await collection.findOne(
+          { orderId: new ObjectId(orderId) },
+          mongoOptions,
+        );
   } catch (error) {
     throw new Error(error);
   }
@@ -224,6 +258,8 @@ export const paymentModel = {
   createNew,
   updateStatus,
   updateStatusByOrderId,
+  updateByOrderId,
+  findByOrderId,
   updatePayOSCompleted,
   findById,
   getAdminPayments,

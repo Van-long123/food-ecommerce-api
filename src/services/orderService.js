@@ -6,11 +6,19 @@ import { paymentModel } from "~/models/paymentModel";
 import { voucherModel } from "~/models/voucherModel";
 import { voucherUsageModel } from "~/models/voucherUsageModel";
 import { refundRequestModel } from "~/models/refundRequestModel";
-import { GET_CLIENT } from "~/config/mongodb";
+import { GET_CLIENT, GET_DB } from "~/config/mongodb";
 import ApiError from "~/utils/ApiError";
 import { userModel } from "~/models/userModel";
 import { sendMail } from "~/utils/sendMail";
 import { getOrderShippingTemplate } from "~/templates/emailTemplates";
+import {
+  cancelPayOSPaymentLink,
+  createPayOSPaymentLink,
+  getPayOSExpiredAt,
+  getPayOSPaymentLink,
+  isPayOSLinkActive,
+} from "~/services/payosService";
+import { env } from "~/config/environment";
 
 // Luồng trạng thái hợp lệ (dùng chung cho Admin update)
 const ALLOWED_STATUS_TRANSITIONS = {
@@ -195,6 +203,133 @@ const getOrderDetails = async (orderId, userId) => {
     };
   } catch (error) {
     throw error;
+  }
+};
+
+const repayOrder = async (orderId, userId) => {
+  const order = await orderModel.findByIdAndUserId(orderId, userId);
+  if (!order) {
+    throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy đơn hàng");
+  }
+
+  if (order.status !== "pending") {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Chỉ có thể thanh toán lại đơn hàng đang chờ xử lý");
+  }
+
+  const payment = order.payment && order.payment.length > 0 ? order.payment[0] : null;
+  if (!payment || payment.paymentMethod !== "PayOS" || payment.status !== "pending") {
+    throw new ApiError(StatusCodes.BAD_REQUEST, "Đơn hàng không đủ điều kiện thanh toán lại");
+  }
+
+  // Luôn verify trạng thái thực tế từ PayOS thay vì tin vào cache DB.
+  // Lý do: user có thể đã bấm "Hủy" trên trang PayOS → PayOS huỷ link phía họ
+  // nhưng webhook cancel (code !== '00') không update DB → DB vẫn "pending" / URL cũ vẫn còn
+  // → isPayOSLinkActive trả về true → trả URL chết → PayOS báo "Đơn hàng không tồn tại".
+  if (payment.payosOrderId) {
+    try {
+      const paymentLinkInfo = await getPayOSPaymentLink(String(payment.payosOrderId));
+
+      if (
+        paymentLinkInfo?.checkoutUrl &&
+        paymentLinkInfo?.status === "PENDING" &&
+        (!paymentLinkInfo?.expiredAt || paymentLinkInfo.expiredAt * 1000 > Date.now())
+      ) {
+        await paymentModel.updateByOrderId(orderId, {
+          paymentUrl: paymentLinkInfo.checkoutUrl,
+          payosOrderId: String(paymentLinkInfo.paymentLinkId || payment.payosOrderId || order.orderCode),
+          expiresAt: paymentLinkInfo.expiredAt
+            ? new Date(paymentLinkInfo.expiredAt * 1000)
+            : payment.expiresAt || new Date(Date.now() + 30 * 60 * 1000),
+          rawResponse: paymentLinkInfo,
+        });
+
+        return { checkoutUrl: paymentLinkInfo.checkoutUrl };
+      }
+    } catch (error) {
+      console.warn("[PayOS] Không thể lấy link cũ, tạo link mới:", error?.message || error);
+    }
+  }
+
+  // Sinh orderCode MỚI để tránh PayOS báo lỗi trùng orderCode với link cũ đã hết hạn/bị hủy
+  const newOrderCode = Number(String(Date.now()).slice(-9));
+
+  const paymentLink = await createPayOSPaymentLink({
+    orderCode: newOrderCode,
+    amount: Number(order.totalPrice || payment.amount || 0),
+    description: `SmartFood #${newOrderCode}`.slice(0, 25),
+    cancelUrl: `${env.WEBSITE_DOMAIN_DEV || env.WEBSITE_DOMAIN_PROD}/order/${orderId}`,
+    returnUrl: `${env.WEBSITE_DOMAIN_DEV || env.WEBSITE_DOMAIN_PROD}/order/${orderId}`,
+    buyerName: order.userInfo?.fullname || "Khách hàng",
+    buyerPhone: order.userInfo?.phone || "",
+    expiredAt: getPayOSExpiredAt(),
+  });
+
+  // Cập nhật orderCode mới vào orders để Webhook PayOS vẫn tìm được đơn hàng
+  await GET_DB()
+    .collection("orders")
+    .updateOne(
+      { _id: new ObjectId(orderId) },
+      { $set: { orderCode: newOrderCode, updatedAt: new Date() } },
+    );
+
+  await paymentModel.updateByOrderId(orderId, {
+    paymentUrl: paymentLink.checkoutUrl,
+    payosOrderId: String(paymentLink.paymentLinkId || newOrderCode),
+    expiresAt: paymentLink.expiredAt
+      ? new Date(paymentLink.expiredAt * 1000)
+      : new Date(Date.now() + 30 * 60 * 1000),
+    rawResponse: paymentLink,
+  });
+
+  return { checkoutUrl: paymentLink.checkoutUrl };
+};
+
+const switchOrderToCod = async (orderId, userId) => {
+  const session = GET_CLIENT().startSession();
+  try {
+    session.startTransaction();
+
+    const order = await orderModel.findByIdAndUserId(orderId, userId);
+    if (!order) {
+      throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy đơn hàng");
+    }
+
+    if (order.status !== "pending") {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "Chỉ có thể đổi phương thức thanh toán khi đơn hàng đang chờ xử lý");
+    }
+
+    const payment = order.payment && order.payment.length > 0 ? order.payment[0] : null;
+    if (!payment || payment.paymentMethod !== "PayOS" || payment.status !== "pending") {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "Đơn hàng không đủ điều kiện đổi sang COD");
+    }
+
+    const paymentLinkId = payment.payosOrderId || payment.rawResponse?.paymentLinkId;
+    if (paymentLinkId) {
+      await cancelPayOSPaymentLink(String(paymentLinkId), "Khách hàng đổi sang COD");
+    }
+
+    await paymentModel.updateByOrderId(
+      orderId,
+      {
+        paymentMethod: "COD",
+        status: "pending",
+        paymentUrl: "",
+        expiresAt: null,
+        rawResponse: {
+          ...(payment.rawResponse || {}),
+          switchedToCodAt: new Date().toISOString(),
+        },
+      },
+      { session },
+    );
+
+    await session.commitTransaction();
+    return await getOrderDetails(orderId, userId);
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    await session.endSession();
   }
 };
 
@@ -693,6 +828,8 @@ export const orderService = {
   getOrderDetails,
   cancelOrder,
   confirmReceived,
+  repayOrder,
+  switchOrderToCod,
   // Admin
   getAdminOrders,
   getAdminOrderDetail,

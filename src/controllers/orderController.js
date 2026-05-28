@@ -102,6 +102,40 @@ const confirmReceived = async (req, res, next) => {
   }
 };
 
+const repayOrder = async (req, res, next) => {
+  try {
+    const userId = req.jwtDecoded._id;
+    const orderId = req.params.id;
+
+    const result = await orderService.repayOrder(orderId, userId);
+
+    res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Tạo lại link thanh toán thành công",
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const switchToCod = async (req, res, next) => {
+  try {
+    const userId = req.jwtDecoded._id;
+    const orderId = req.params.id;
+
+    const result = await orderService.switchOrderToCod(orderId, userId);
+
+    res.status(StatusCodes.OK).json({
+      success: true,
+      message: "Đã đổi phương thức thanh toán sang COD",
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // ADMIN-SIDE HANDLERS
 
 const getOrders = async (req, res, next) => {
@@ -275,6 +309,8 @@ export const orderController = {
   getOrderDetails,
   cancelOrder,
   confirmReceived,
+  repayOrder,
+  switchToCod,
   // Admin
   getOrders,
   getOrderDetailAdmin,

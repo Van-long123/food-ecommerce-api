@@ -19,8 +19,11 @@ import {
 } from "~/templates/emailTemplates";
 import { userModel } from "~/models/userModel";
 import { env } from "~/config/environment";
-import { generateSignature, isValidData } from "~/utils/payosUtils";
-import axios from "axios";
+import { isValidData } from "~/utils/payosUtils";
+import {
+  createPayOSPaymentLink,
+  getPayOSExpiredAt,
+} from "~/services/payosService";
 
 /**
  * Tính phí vận chuyển cho địa chỉ được chọn.
@@ -345,8 +348,6 @@ const createCodCheckout = async (userId, payload) => {
   }
 };
 
-const PAYOS_API_URL = "https://api-merchant.payos.vn/v2/payment-requests";
-
 /**
  * Tạo đơn thanh toán PayOS (VietQR).
  * Logic giống 100% createCodCheckout, nhưng:
@@ -564,56 +565,40 @@ const createPayOSCheckout = async (userId, payload) => {
     });
 
     // Gọi PayOS API để lấy checkoutUrl
-    const dataForSignature = {
+    const paymentLink = await createPayOSPaymentLink({
       orderCode,
       amount: totalPay,
-      description: `SmartFood #${orderCode}`.slice(0, 25), // PayOS max 25 chars
+      description: `SmartFood #${orderCode}`.slice(0, 25),
       cancelUrl: `${env.WEBSITE_DOMAIN_DEV || env.WEBSITE_DOMAIN_PROD}/order/${createdOrderId}`,
       returnUrl: `${env.WEBSITE_DOMAIN_DEV || env.WEBSITE_DOMAIN_PROD}/order/${createdOrderId}`,
-    };
-
-    const signature = generateSignature(
-      dataForSignature,
-      env.PAYOS_CHECKSUM_KEY,
-    );
-
-    const payosPayload = {
-      ...dataForSignature,
-      signature,
       buyerName: address.username,
       buyerPhone: address.phone,
-    };
-
-    const payosResponse = await axios.post(PAYOS_API_URL, payosPayload, {
-      headers: {
-        "x-client-id": env.PAYOS_CLIENT_ID,
-        "x-api-key": env.PAYOS_API_KEY,
-        "Content-Type": "application/json",
-      },
+      expiredAt: getPayOSExpiredAt(),
     });
-
-    const { checkoutUrl } = payosResponse.data?.data || {};
-
-    if (!checkoutUrl) {
-      throw new ApiError(
-        StatusCodes.BAD_GATEWAY,
-        "PayOS không trả về checkoutUrl",
-      );
-    }
 
     // Cập nhật paymentUrl trực tiếp
     await GET_DB()
       .collection("payments")
       .updateOne(
         { orderId: new ObjectId(createdOrderId) },
-        { $set: { paymentUrl: checkoutUrl, updatedAt: new Date() } },
+        {
+          $set: {
+            paymentUrl: paymentLink.checkoutUrl,
+            payosOrderId: String(paymentLink.paymentLinkId || orderCode),
+            expiresAt: paymentLink.expiredAt
+              ? new Date(paymentLink.expiredAt * 1000)
+              : new Date(Date.now() + 30 * 60 * 1000),
+            rawResponse: paymentLink,
+            updatedAt: new Date(),
+          },
+        },
       );
 
     // Xóa sản phẩm khỏi giỏ hàng
     const productIdsToRemove = normalizedItems.map((item) => item.productId);
     await cartService.removeItems(userId, productIdsToRemove);
 
-    return { checkoutUrl, orderId: createdOrderId };
+    return { checkoutUrl: paymentLink.checkoutUrl, orderId: createdOrderId };
   } finally {
     await session.endSession();
   }
