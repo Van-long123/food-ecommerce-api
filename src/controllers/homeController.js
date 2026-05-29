@@ -13,10 +13,11 @@ const getHomeAggregate = async (req, res, next) => {
 const getCampaignProducts = async (req, res, next) => {
   try {
     const { slug } = req.params;
-    const { page, limit } = req.query;
+    const { page, limit, featured } = req.query;
     const result = await homeService.getCampaignProductsBySlug(slug, {
       page,
       limit,
+      featured,
     });
     res.status(StatusCodes.OK).json(result);
   } catch (error) {

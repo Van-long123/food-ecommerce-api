@@ -34,13 +34,19 @@ const CAMPAIGNS = [
     sort: { position: 1, createdAt: -1 }
   },
   {
-    id: 'goi_y',
-    slug: 'goi-y-cho-ban',
-    name: 'Gợi ý<br/>cho bạn',
-    match: {},
-    sort: { createdAt: -1, position: 1 }
+    id: 'noi_bat',
+    slug: 'noi-bat',
+    //  là danh sách slug cũ được chấp nhận như một đường dẫn thay thế.
+    aliases: ['goi-y-cho-ban'],
+    name: 'Nổi bật',
+    match: { featured: true },
+    sort: { position: 1, createdAt: -1 }
   }
 ]
+
+const findCampaignBySlug = (slug) => CAMPAIGNS.find((campaign) => {
+  return campaign.slug === slug || (Array.isArray(campaign.aliases) && campaign.aliases.includes(slug))
+})
 
 
 
@@ -186,14 +192,19 @@ const getHomeAggregate = async (queryParams = {}) => {
 // })
 // }
 
-const getCampaignProductsBySlug = async (slug, { page = 1, limit = 30 }) => {
-  const campaign = CAMPAIGNS.find(c => c.slug === slug)
+const getCampaignProductsBySlug = async (slug, { page = 1, limit = 30, featured }) => {
+  const campaign = findCampaignBySlug(slug)
   if (!campaign) {
     throw new Error('Campaign not found')
   }
 
+  const match = { ...campaign.match }
+  if (featured !== undefined) {
+    match.featured = parseBoolean(featured, match.featured ?? false)
+  }
+
   const result = await productModel.getPaginatedCampaignProducts({
-    match: campaign.match,
+    match,
     sort: campaign.sort,
     limit: parsePositiveInt(limit, 30),
     page: parsePositiveInt(page, 1)
