@@ -70,4 +70,7 @@ export const env = {
 
   // OpenAI — Production Chatbot (Intent Router + RAG Pipeline)
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+
+  // Redis — Embedding Cache
+  REDIS_URL: process.env.REDIS_URL,
 }

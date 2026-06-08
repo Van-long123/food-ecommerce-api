@@ -16,4 +16,8 @@ Router.route('/history').get(authMiddleware.isAuthorizedOptional, chatbotControl
 // Reset lịch sử hội thoại (optional auth)
 Router.route('/history').delete(authMiddleware.isAuthorizedOptional, chatbotController.clearHistory)
 
+// POST /v1/client/chatbot/stream
+// SSE Streaming — trả về từng chunk chữ ngay lập tức (giống ChatGPT)
+Router.route('/stream').post(authMiddleware.isAuthorizedOptional, chatbotController.sendMessageStream)
+
 export const chatbotRoute = Router

@@ -28,6 +28,65 @@ const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
 const GPT_MODEL = "gpt-4o-mini";
 const EMBED_MODEL = "text-embedding-3-small"; // 1536 chiều
 
+// ─── Redis Client (Embedding Cache) ──────────────────────────────────────────
+import { createClient } from "redis";
+
+let redisClient = null;
+
+const getRedis = async () => {
+  if (redisClient && redisClient.isOpen) return redisClient;
+  try {
+    redisClient = createClient({
+      url: env.REDIS_URL || "redis://localhost:6379",
+      RESP: 2
+    });
+    redisClient.on("error", (e) => console.warn("[Redis] Lỗi kết nối:", e.message));
+    await redisClient.connect();
+    console.log("[Redis] Kết nối thành công — Embedding cache đã sẵn sàng.");
+  } catch (e) {
+    console.warn("[Redis] Không thể kết nối, bỏ qua cache:", e.message);
+    redisClient = null;
+  }
+  return redisClient;
+};
+
+/**
+ * Tạo embedding có cache Redis.
+ * - Cache HIT  → trả về vector ngay (không gọi OpenAI)
+ * - Cache MISS → gọi OpenAI, lưu vào Redis TTL 24h, trả về vector
+ */
+const getEmbeddingCached = async (text) => {
+  const cacheKey = `embed:${text.trim().toLowerCase().slice(0, 200)}`;
+  try {
+    const redis = await getRedis();
+    if (redis) {
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        console.log(`[Cache HIT] embed: "${text.slice(0, 40)}..."`);
+        return JSON.parse(cached);
+      }
+    }
+  } catch (e) {
+    console.warn("[Redis] Lỗi đọc cache:", e.message);
+  }
+
+  // Cache MISS → gọi OpenAI
+  const res = await openai.embeddings.create({ model: EMBED_MODEL, input: text });
+  const vector = res.data[0].embedding;
+
+  try {
+    const redis = await getRedis();
+    if (redis) {
+      await redis.setEx(cacheKey, 86400, JSON.stringify(vector)); // TTL 24h
+      console.log(`[Cache SET] embed: "${text.slice(0, 40)}..."`);
+    }
+  } catch (e) {
+    console.warn("[Redis] Lỗi ghi cache:", e.message);
+  }
+
+  return vector;
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Loại bỏ thẻ HTML từ TinyMCE trước khi nhét vào context */
@@ -191,15 +250,9 @@ const executeTool = async (toolCall, userId) => {
       case "search_products": {
         const { query, limit = 6 } = args;
 
-        // Bước 1: Tạo embedding cho câu hỏi
-        const embedRes = await openai.embeddings.create({
-          model: EMBED_MODEL,
-          input: query,
-        });
-        let products = await productModel.findByVectorSearch(
-          embedRes.data[0].embedding,
-          limit,
-        );
+        // Bước 1: Tạo embedding có cache Redis
+        const embedding = await getEmbeddingCached(query);
+        let products = await productModel.findByVectorSearch(embedding, limit);
 
         // Bước 2: Fallback sang Text Search nếu Vector Index chưa có dữ liệu
         if (!products || products.length === 0) {
@@ -406,6 +459,7 @@ const SYSTEM_PROMPT = `Bạn là trợ lý AI của SmartFood — hệ thống b
 
 ## Quy tắc sử dụng Tools
 - Khi khách hỏi về SẢN PHẨM hay NGUYÊN LIỆU: LUÔN gọi tool "search_products" trước để lấy dữ liệu thực.
+- Khi khách hỏi về CHẾ ĐỘ ĂN UỐNG, TƯ VẤN DINH DƯỠNG hoặc CÁC THỰC PHẨM tốt cho sức khỏe/giảm cân/tăng cơ: LUÔN gọi tool "search_products" với các từ khóa liên quan (như "rau xanh", "ức gà", "yến mạch", "trái cây", v.v.) để lấy danh sách sản phẩm THỰC TẾ của cửa hàng, tuyệt đối không tự bịa thông tin.
 - Khi khách hỏi CÔNG THỨC NẤU ĂN: Cung cấp công thức, ĐỒNG THỜI gọi "search_products" để kiểm tra nguyên liệu SmartFood có bán không và gợi ý.
 - Khi khách cung cấp MÃ ĐƠN HÀNG cụ thể: gọi "get_order_status".
 - Khi khách hỏi chung về ĐƠN HÀNG của họ: gọi "get_recent_orders".
@@ -419,6 +473,7 @@ const SYSTEM_PROMPT = `Bạn là trợ lý AI của SmartFood — hệ thống b
   - TUYỆT ĐỐI KHÔNG thêm domain (http/https) vào link. CHỈ DÙNG "/product/slug".
   - Đúng: [Thịt Bò Úc Nhập Khẩu](/product/thit-bo-uc)
   - Sai: [Thịt Bò Úc](https://smartfood.vn/product/thit-bo-uc)
+  - TUYỆT ĐỐI KHÔNG tự tạo link cho các danh mục chung chung (VD: không tạo link kiểu [Rau xanh](/product/rau-xanh) hay [Trái cây](/product/trai-cay)) nếu trong kết quả của tool không trả về sản phẩm cụ thể có slug đó. Chỉ gắn link cho sản phẩm thực tế có slug hợp lệ được trả về từ tool "search_products" hoặc "get_recommendations".
 - MỌI ĐƠN HÀNG phải dùng định dạng link Markdown TƯƠNG ĐỐI: [Mã đơn: <orderCode>](/order/<id>)
   - Bắt buộc dùng trường "id" (chuỗi 24 ký tự) trả về từ kết quả để gắn link (/order/<id>).
   - Bắt buộc dùng trường "orderCode" (ví dụ: 742962321) để hiển thị tên mã đơn hàng.
@@ -600,8 +655,135 @@ const invalidateProductCache = () => {
   // No-op trong kiến trúc Function Calling — không còn dùng snapshot cache
 };
 
+// ─── 5. sendMessageStream — SSE Streaming Response ────────────────────────────
+/**
+ * Giống sendMessage nhưng trả về câu trả lời theo cơ chế SSE (stream: true).
+ * Người dùng thấy chữ xuất hiện ngay lập tức thay vì chờ toàn bộ câu trả lời.
+ *
+ * @param {object} params
+ * @param {string} params.message   - Tin nhắn của user
+ * @param {string} params.sessionId - Session ID
+ * @param {string|null} params.userId - User ID (null nếu khách vãng lai)
+ * @param {object} params.res       - Express Response object (để ghi SSE)
+ */
+const sendMessageStream = async ({ message, sessionId, userId = null, res }) => {
+  if (!message?.trim()) throw new ApiError(StatusCodes.BAD_REQUEST, "Tin nhắn không được để trống!");
+  if (!sessionId) throw new ApiError(StatusCodes.BAD_REQUEST, "SessionId là bắt buộc!");
+
+  // Thiết lập headers SSE
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // Tắt buffer trên Nginx
+  res.flushHeaders();
+
+  /** Ghi một chunk SSE xuống client */
+  const emit = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+  try {
+    // Lấy lịch sử hội thoại
+    await chatbotMessageModel.upsertSession({ sessionId, userId });
+    const session = await chatbotMessageModel.findSession({ sessionId, userId });
+    const history = (session?.messages || [])
+      .slice(-10)
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    const messages = [
+      { role: "system", content: SYSTEM_PROMPT },
+      ...history,
+      { role: "user", content: message.trim() },
+    ];
+
+    // BƯỚC 1: OpenAI lần 1 — phân tích ý định và gọi Tool
+    const firstResponse = await openai.chat.completions.create({
+      model: GPT_MODEL,
+      messages,
+      tools: TOOLS,
+      tool_choice: "auto",
+      temperature: 0.7,
+      max_tokens: 1000,
+    });
+
+    const assistantMessage = firstResponse.choices[0].message;
+    const toolCalls = assistantMessage.tool_calls;
+
+    if (toolCalls && toolCalls.length > 0) {
+      // BƯỚC 2: Thực thi song song tất cả tools
+      emit({ type: "tool_start", count: toolCalls.length });
+      messages.push(assistantMessage);
+
+      const toolResults = await Promise.all(
+        toolCalls.map(async (toolCall) => {
+          const output = await executeTool(toolCall, userId);
+          return { tool_call_id: toolCall.id, role: "tool", name: toolCall.function.name, content: output };
+        }),
+      );
+      messages.push(...toolResults);
+
+      // BƯỚC 3: OpenAI lần 2 — STREAM câu trả lời cuối cùng
+      const stream = await openai.chat.completions.create({
+        model: GPT_MODEL,
+        messages,
+        temperature: 0.7,
+        max_tokens: 1000,
+        stream: true, // ← BẬT STREAMING
+      });
+
+      let aiReply = "";
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content;
+        if (delta) {
+          aiReply += delta;
+          emit({ type: "chunk", content: delta });
+        }
+      }
+
+      // Lưu lịch sử và báo hoàn thành
+      const now = new Date();
+      await chatbotMessageModel.pushMessages({ sessionId, userId }, [
+        { role: "user", content: message.trim(), createdAt: now },
+        { role: "assistant", content: aiReply, createdAt: now },
+      ]);
+      emit({ type: "done", sessionId });
+
+    } else {
+      // Không có tool → stream trực tiếp câu trả lời ngắn
+      const stream = await openai.chat.completions.create({
+        model: GPT_MODEL,
+        messages,
+        temperature: 0.7,
+        max_tokens: 500,
+        stream: true,
+      });
+
+      let aiReply = "";
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta?.content;
+        if (delta) {
+          aiReply += delta;
+          emit({ type: "chunk", content: delta });
+        }
+      }
+
+      const now = new Date();
+      await chatbotMessageModel.pushMessages({ sessionId, userId }, [
+        { role: "user", content: message.trim(), createdAt: now },
+        { role: "assistant", content: aiReply, createdAt: now },
+      ]);
+      emit({ type: "done", sessionId });
+    }
+
+  } catch (err) {
+    console.error("[sendMessageStream] Lỗi:", err.message);
+    emit({ type: "error", message: "Không thể kết nối AI, vui lòng thử lại!" });
+  } finally {
+    res.end();
+  }
+};
+
 export const chatbotService = {
   sendMessage,
+  sendMessageStream,
   clearHistory,
   getHistory,
   invalidateProductCache,

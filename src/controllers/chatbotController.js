@@ -19,6 +19,26 @@ const sendMessage = async (req, res, next) => {
 }
 
 /**
+ * POST /v1/client/chatbot/stream
+ * Body: { message, sessionId }
+ * Auth: optional
+ * Response: text/event-stream (SSE)
+ * Mỗi chunk SSE có dạng: data: {"type":"chunk","content":"..."}
+ * Khi xong: data: {"type":"done","sessionId":"..."}
+ */
+const sendMessageStream = async (req, res, next) => {
+  try {
+    const userId = req.jwtDecoded ? req.jwtDecoded._id : null
+    const { message, sessionId } = req.body
+    await chatbotService.sendMessageStream({ message, sessionId, userId, res })
+  } catch (error) {
+    // Nếu headers chưa gửi, truyền lỗi cho Express error handler
+    if (!res.headersSent) next(error)
+    else res.end()
+  }
+}
+
+/**
  * DELETE /v1/client/chatbot/history
  * Body: { sessionId }
  * Auth: optional
@@ -54,6 +74,7 @@ const getHistory = async (req, res, next) => {
 
 export const chatbotController = {
   sendMessage,
+  sendMessageStream,
   clearHistory,
   getHistory,
 }
