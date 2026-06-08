@@ -15,7 +15,7 @@ const VOUCHER_TYPES = {
 const VOUCHER_STATUSES = {
   ACTIVE: "active",
   INACTIVE: "inactive",
-  EXPIRED: "expired",
+  // EXPIRED: "expired",
 };
 
 const VOUCHER_APPLY_FOR = {

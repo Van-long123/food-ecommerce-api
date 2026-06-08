@@ -12,6 +12,7 @@ import { clientOrderRoute } from './orderRoute'
 import { clientCheckoutRoute } from './checkoutRoute'
 import { clientRefundRequestRoute } from './refundRequestRoute'
 import { clientSettingsRoute } from './settingsRoute'
+import { chatbotRoute } from './chatbotRoute'
 
 const router = express.Router()
 
@@ -29,5 +30,6 @@ router.use('/orders', clientOrderRoute)
 router.use('/checkout', clientCheckoutRoute)
 router.use('/refund-requests', clientRefundRequestRoute)
 router.use('/settings', clientSettingsRoute)
+router.use('/chatbot', chatbotRoute)
 
 export const clientRouter = router

@@ -57,5 +57,17 @@ export const env = {
 
   ORDER_AUTO_COMPLETE_DAYS: process.env.ORDER_AUTO_COMPLETE_DAYS,
 
-  SYSTEM_ROLE_IDS: process.env.SYSTEM_ROLE_IDS
+  SYSTEM_ROLE_IDS: process.env.SYSTEM_ROLE_IDS,
+
+  // Groq AI (legacy)
+  // GROQ_API_KEY: process.env.GROQ_API_KEY,
+
+  // Gemini AI — API Key Pool (legacy)
+  // GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+  // GEMINI_API_KEY_1: process.env.GEMINI_API_KEY_1,
+  // GEMINI_API_KEY_2: process.env.GEMINI_API_KEY_2,
+  // GEMINI_API_KEY_3: process.env.GEMINI_API_KEY_3,
+
+  // OpenAI — Production Chatbot (Intent Router + RAG Pipeline)
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
 }

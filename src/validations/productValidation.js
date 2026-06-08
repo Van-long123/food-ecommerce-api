@@ -37,14 +37,25 @@ const createNew = async (req, res, next) => {
       totalRating: Joi.number().optional(),
       numberOfRatings: Joi.number().integer().optional(),
     }).optional(),
-    position: Joi.alternatives().try(Joi.number().integer(), Joi.string().allow(''), Joi.allow(null)).optional(),
+    position: Joi.alternatives()
+      .try(Joi.number().integer(), Joi.string().allow(""), Joi.allow(null))
+      .optional(),
     primary_category_id: Joi.alternatives()
       .try(Joi.string(), Joi.allow(null))
       .optional(),
-    category_ids: Joi.array().items(Joi.string()).optional().single(),
+    category_ids: Joi.array()
+      .items(Joi.string())
+      .min(1)
+      .required()
+      .single()
+      .messages({
+        "array.min": "Sản phẩm phải có ít nhất 1 danh mục phụ.",
+        "any.required": "Vui lòng chọn ít nhất 1 danh mục phụ.",
+      }),
   });
 
   try {
+    console.log("object");
     await schema.validateAsync(req.body, {
       abortEarly: false,
       allowUnknown: true,
@@ -78,11 +89,20 @@ const update = async (req, res, next) => {
       totalRating: Joi.number().optional(),
       numberOfRatings: Joi.number().integer().optional(),
     }).optional(),
-    position: Joi.alternatives().try(Joi.number().integer(), Joi.string().allow(''), Joi.allow(null)).optional(),
+    position: Joi.alternatives()
+      .try(Joi.number().integer(), Joi.string().allow(""), Joi.allow(null))
+      .optional(),
     primary_category_id: Joi.alternatives()
       .try(Joi.string(), Joi.allow(null))
       .optional(),
-    category_ids: Joi.array().items(Joi.string()).optional().single(),
+    category_ids: Joi.array()
+      .items(Joi.string())
+      .min(1)
+      .optional()
+      .single()
+      .messages({
+        "array.min": "Sản phẩm phải có ít nhất 1 danh mục phụ.",
+      }),
   });
 
   try {
@@ -123,4 +143,9 @@ const adminBulkDelete = async (req, res, next) => {
   }
 };
 
-export const productValidation = { createNew, update, adminBulkStatus, adminBulkDelete };
+export const productValidation = {
+  createNew,
+  update,
+  adminBulkStatus,
+  adminBulkDelete,
+};

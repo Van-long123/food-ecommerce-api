@@ -43,6 +43,8 @@ const PRODUCT_COLLECTION_SCHEMA = Joi.object({
   isBestPrice: Joi.boolean().default(false),
   isOnlineExclusive: Joi.boolean().default(false),
   tags: Joi.array().items(Joi.string()).default([]),
+  embeddingVector: Joi.array().items(Joi.number()).length(1536).allow(null).default(null),
+  embeddedAt: Joi.date().allow(null).default(null),
   ratings: Joi.object({
     totalRating: Joi.number().min(0).default(0),
     numberOfRatings: Joi.number().integer().min(0).default(0),
@@ -903,6 +905,202 @@ const softDeleteMany = async (ids = [], actorId, actorEmail) => {
   }
 };
 
+/**
+ * Tìm sản phẩm theo nhãn sức khỏe hoặc từ khóa tự do (healthBenefits, title, tags, description).
+ * Hỗ trợ tìm bằng Regex để mở rộng (Ví dụ: "omega 3", "ít calo").
+ * Sắp xếp: bán chạy nhất.
+ *
+ * @param {string[]} keywords - Mảng từ khóa cần tìm, ví dụ: ["giảm cân", "ít calo"]
+ * @param {object} options - { limit: number, category: string }
+ */
+const findByHealthBenefit = async (keywords = [], options = {}) => {
+  try {
+    if (!keywords.length) return []
+
+    const { limit = 12, category = null } = options
+
+    const regexps = keywords.map((kw) => new RegExp(kw, 'i'))
+
+    const matchStage = {
+      deleted: false,
+      status: 'active',
+      stock: { $gt: 0 },
+      $or: [
+        { title: { $in: regexps } },
+        { tags: { $in: regexps } },
+        { description: { $in: regexps } },
+        { healthBenefits: { $in: regexps } },
+      ],
+    }
+
+    // Lọc thêm theo danh mục nếu có
+    if (category) {
+      matchStage['primary_category.slug'] = category
+    }
+
+    const pipeline = [
+      { $match: matchStage },
+
+      // Lookup primary category để hiển thị tên danh mục
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'primary_category_id',
+          foreignField: '_id',
+          pipeline: [
+            { $match: { deleted: false } },
+            { $project: { _id: 1, title: 1, slug: 1 } },
+          ],
+          as: 'primary_category',
+        },
+      },
+      { $unwind: { path: '$primary_category', preserveNullAndEmptyArrays: true } },
+
+      // Sắp xếp: bán chạy nhất > vị trí
+      { $sort: { soldCount: -1, position: 1 } },
+      { $limit: limit },
+
+      // Chỉ trả về các trường cần thiết cho chatbot
+      {
+        $project: {
+          _id: 1,
+          title: 1,
+          slug: 1,
+          price: 1,
+          discountPercentage: 1,
+          unit: 1,
+          stock: 1,
+          soldCount: 1,
+          thumbnail: 1,
+          healthBenefits: 1,
+          'primary_category.title': 1,
+          'primary_category.slug': 1,
+        },
+      },
+    ]
+
+    return await GET_DB()
+      .collection(PRODUCT_COLLECTION_NAME)
+      .aggregate(pipeline)
+      .toArray()
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+/**
+ * Tìm sản phẩm theo mảng từ khóa (tìm kiếm Regex).
+ * Dùng cho Chatbot khi user hỏi mua sản phẩm cụ thể (ví dụ: "thịt heo", "cá hồi")
+ */
+const findByKeywords = async (keywords = [], options = {}) => {
+  try {
+    if (!keywords.length) return []
+    const { limit = 15 } = options
+
+    const regexps = keywords.map((kw) => new RegExp(kw, 'i'))
+
+    return await GET_DB()
+      .collection(PRODUCT_COLLECTION_NAME)
+      .find({
+        deleted: false,
+        status: 'active',
+        stock: { $gt: 0 },
+        $or: [
+          { title: { $in: regexps } },
+          { tags: { $in: regexps } },
+          { description: { $in: regexps } },
+          { healthBenefits: { $in: regexps } },
+        ],
+      })
+      .sort({ soldCount: -1, position: 1 })
+      .limit(limit)
+      .project({
+        _id: 1,
+        title: 1,
+        slug: 1,
+        price: 1,
+        discountPercentage: 1,
+        unit: 1,
+        stock: 1,
+        soldCount: 1,
+      })
+      .toArray()
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+
+/**
+ * Tìm sản phẩm bằng MongoDB Atlas Vector Search ($vectorSearch).
+ * Dùng cho RAG Chatbot: nhận vector embedding của câu hỏi user, tìm sản phẩm ngữ nghĩa tương đồng.
+ *
+ * @param {number[]} queryVector - Vector embedding 1536 chiều (từ OpenAI text-embedding-3-small)
+ * @param {number} limit - Số lượng kết quả trả về
+ * @returns {Promise<Array>}
+ */
+const findByVectorSearch = async (queryVector, limit = 8) => {
+  try {
+    return await GET_DB()
+      .collection(PRODUCT_COLLECTION_NAME)
+      .aggregate([
+        {
+          $vectorSearch: {
+            index: 'vector_index',
+            path: 'embeddingVector',
+            queryVector,
+            numCandidates: 200,
+            limit: limit + 10, // Lấy dư ra một chút để bù trừ cho bước lọc $match bên dưới
+          },
+        },
+        {
+          $match: { deleted: false, status: 'active', stock: { $gt: 0 } },
+        },
+        {
+          $limit: limit,
+        },
+        {
+          $lookup: {
+            from: 'categories',
+            localField: 'primary_category_id',
+            foreignField: '_id',
+            pipeline: [
+              { $match: { deleted: false } },
+              { $project: { _id: 1, title: 1, slug: 1 } },
+            ],
+            as: 'primary_category',
+          },
+        },
+        {
+          $addFields: {
+            primary_category: { $arrayElemAt: ['$primary_category', 0] },
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            title: 1,
+            slug: 1,
+            price: 1,
+            discountPercentage: 1,
+            unit: 1,
+            stock: 1,
+            soldCount: 1,
+            thumbnail: 1,
+            description: 1, // Raw HTML từ TinyMCE — sẽ được stripHtml() trước khi nhét vào context
+            'primary_category.title': 1,
+            'primary_category.slug': 1,
+            score: { $meta: 'vectorSearchScore' },
+          },
+        },
+      ])
+      .toArray()
+  } catch (error) {
+    // Nếu Vector Index chưa được tạo trên Atlas, trả về rỗng để fallback sang findByKeywords
+    return []
+  }
+}
+
 export const productModel = {
   PRODUCT_STATUSES,
   PRODUCT_UNITS,
@@ -930,4 +1128,8 @@ export const productModel = {
   updateManyStatus,
   softDeleteMany,
   getMaxPosition,
+  findByHealthBenefit,
+  findByKeywords,
+  findByVectorSearch, // RAG: Vector Search cho Chatbot
 };
+

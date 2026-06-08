@@ -10,6 +10,7 @@ import { slugify } from "~/utils/formatters";
 import { parseBool, parseNum } from "~/utils/parsers";
 import { CloudinaryProvider } from "~/providers/CloudinaryProvider";
 import { evaluateReviewModeration } from "~/utils/reviewModeration";
+import { embeddingService } from "~/services/embeddingService";
 
 // Helper: generate unique slug
 const generateUniqueSlug = async (title, providedSlug) => {
@@ -125,6 +126,14 @@ const createNew = async (reqBody, actorId, files = null) => {
     if (!Array.isArray(category_ids))
       category_ids = category_ids ? [category_ids] : [];
 
+    const embeddingVector = await embeddingService.generateProductVector({
+      title: reqBody.title,
+      description: reqBody.description || "",
+      tags,
+      healthBenefits: reqBody.healthBenefits,
+      unit: reqBody.unit || "kg",
+    });
+
     const newProduct = {
       title: reqBody.title,
       slug,
@@ -141,6 +150,8 @@ const createNew = async (reqBody, actorId, files = null) => {
       isBestPrice: parseBool(reqBody.isBestPrice),
       isOnlineExclusive: parseBool(reqBody.isOnlineExclusive),
       tags,
+      embeddingVector: embeddingVector || null,
+      embeddedAt: embeddingVector ? new Date() : null,
       ratings: { totalRating: 0, numberOfRatings: 0 },
       position,
       primary_category_id: reqBody.primary_category_id || null,
@@ -342,6 +353,30 @@ const update = async (id, reqBody, actorId, files = null) => {
         existing && existing._id.toString() !== id
           ? `${slugCandidate}-${Date.now()}`
           : slugCandidate;
+    }
+
+    const shouldRegenerateEmbedding = [
+      "title",
+      "description",
+      "tags",
+      "healthBenefits",
+      "unit",
+    ].some((key) => reqBody[key] !== undefined);
+
+    if (shouldRegenerateEmbedding) {
+      const embeddingSource = {
+        title: reqBody.title ?? product.title,
+        description: reqBody.description ?? product.description,
+        tags: reqBody.tags !== undefined ? updateData.tags : product.tags,
+        healthBenefits: reqBody.healthBenefits ?? product.healthBenefits,
+        unit: reqBody.unit ?? product.unit,
+      };
+
+      const vector = await embeddingService.generateProductVector(embeddingSource);
+      if (vector) {
+        updateData.embeddingVector = vector;
+        updateData.embeddedAt = new Date();
+      }
     }
 
     await productModel.pushUpdatedBy(id, actorId, actor.email);

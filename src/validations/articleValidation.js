@@ -18,7 +18,10 @@ const createNew = async (req, res, next) => {
     featured: Joi.boolean().optional(),
     position: Joi.alternatives().try(Joi.number().integer(), Joi.string().allow(''), Joi.allow(null)).optional(),
     primary_category_id: Joi.alternatives().try(Joi.string(), Joi.allow(null)).optional(),
-    category_ids: Joi.array().items(Joi.string()).optional().single(),
+    category_ids: Joi.array().items(Joi.string()).min(1).required().single().messages({
+      'array.min': 'Bài viết phải có ít nhất 1 danh mục phụ.',
+      'any.required': 'Vui lòng chọn ít nhất 1 danh mục phụ.'
+    }),
     tags: Joi.array().items(Joi.string()).optional().single(),
     comments: Joi.array().items(
       Joi.object({
@@ -54,7 +57,9 @@ const update = async (req, res, next) => {
     featured: Joi.boolean().optional(),
     position: Joi.alternatives().try(Joi.number().integer(), Joi.string().allow(''), Joi.allow(null)).optional(),
     primary_category_id: Joi.alternatives().try(Joi.string(), Joi.allow(null)).optional(),
-    category_ids: Joi.array().items(Joi.string()).optional().single(),
+    category_ids: Joi.array().items(Joi.string()).min(1).optional().single().messages({
+      'array.min': 'Bài viết phải có ít nhất 1 danh mục phụ.'
+    }),
     tags: Joi.array().items(Joi.string()).optional().single(),
     comments: Joi.array().items(
       Joi.object({

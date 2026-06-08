@@ -7,8 +7,8 @@ const CATEGORY_PRODUCT_COLLECTION_NAME = 'category_products'
 const CATEGORY_PRODUCT_COLLECTION_SCHEMA = Joi.object({
   category_id: Joi.any().required(),
   product_id: Joi.any().required(),
-  createdAt: Joi.date().default(() => new Date()),
-  updatedAt: Joi.date().default(null)
+  // createdAt: Joi.date().default(() => new Date()),
+  // updatedAt: Joi.date().default(null)
 })
 
 const validateBeforeCreate = async (data) => {
@@ -24,11 +24,11 @@ const upsert = async ({ product_id, category_id }) => {
       category_id: new ObjectId(category_id)
     }
     const update = {
-      $set: { updatedAt: new Date() },
+      // $set: { updatedAt: new Date() },
       $setOnInsert: {
         product_id: new ObjectId(product_id),
         category_id: new ObjectId(category_id),
-        createdAt: new Date()
+        // createdAt: new Date()
       }
     }
     const result = await GET_DB()
