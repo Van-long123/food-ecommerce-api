@@ -233,6 +233,39 @@ const getList = async ({
   }
 };
 
+/**
+ * Chatbot: Lấy tất cả voucher đang hoạt động, có thể dùng được (còn hạn, còn lượt).
+ * Chỉ project đúng các trường chatbot cần, không lấy createdBy/updatedBy.
+ */
+const findActiveVouchers = async () => {
+  try {
+    const now = new Date();
+    return await GET_DB()
+      .collection(VOUCHER_COLLECTION_NAME)
+      .find(
+        {
+          deleted: false,
+          status: VOUCHER_STATUSES.ACTIVE,
+          startDate: { $lte: now },
+          endDate: { $gt: now },
+          $expr: { $lt: ['$usedCount', '$quantity'] },
+        },
+        {
+          projection: {
+            code: 1, name: 1, description: 1,
+            type: 1, discountValue: 1, maxDiscountAmount: 1,
+            minOrderValue: 1, applyFor: 1, applyForIds: 1,
+            endDate: 1, quantity: 1, usedCount: 1, isFeatured: 1,
+          },
+          sort: { isFeatured: -1, discountValue: -1 },
+        },
+      )
+      .toArray();
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
 const decreaseUsedCount = async (voucherId, options = {}) => {
   try {
     return await GET_DB()
@@ -260,4 +293,5 @@ export const voucherModel = {
   softDelete,
   getList,
   decreaseUsedCount,
+  findActiveVouchers,
 };

@@ -1101,6 +1101,39 @@ const findByVectorSearch = async (queryVector, limit = 8) => {
   }
 }
 
+/**
+ * [Chatbot Tool] Lấy danh sách sản phẩm bán chạy nhất, sắp xếp theo soldCount giảm dần.
+ * - Chỉ lấy sản phẩm active, chưa xóa, còn hàng.
+ * - Trả về những field cần thiết cho AI tổng hợp.
+ */
+const findTopSelling = async (limit = 5) => {
+  try {
+    const products = await GET_DB()
+      .collection(PRODUCT_COLLECTION_NAME)
+      .find({
+        deleted: false,
+        status: PRODUCT_STATUSES.ACTIVE,
+        stock: { $gt: 0 },
+      })
+      .sort({ soldCount: -1 })
+      .limit(limit)
+      .project({
+        title: 1,
+        slug: 1,
+        price: 1,
+        unit: 1,
+        stock: 1,
+        soldCount: 1,
+        discountPercentage: 1,
+        description: 1,
+      })
+      .toArray();
+    return products;
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
 export const productModel = {
   PRODUCT_STATUSES,
   PRODUCT_UNITS,
@@ -1131,5 +1164,6 @@ export const productModel = {
   findByHealthBenefit,
   findByKeywords,
   findByVectorSearch, // RAG: Vector Search cho Chatbot
+  findTopSelling,    // Chatbot: Lấy sản phẩm bán chạy nhất
 };
 

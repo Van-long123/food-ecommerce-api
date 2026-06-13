@@ -38,9 +38,11 @@ const getRedis = async () => {
   try {
     redisClient = createClient({
       url: env.REDIS_URL || "redis://localhost:6379",
-      RESP: 2
+      RESP: 2,
     });
-    redisClient.on("error", (e) => console.warn("[Redis] Lỗi kết nối:", e.message));
+    redisClient.on("error", (e) =>
+      console.warn("[Redis] Lỗi kết nối:", e.message),
+    );
     await redisClient.connect();
     console.log("[Redis] Kết nối thành công — Embedding cache đã sẵn sàng.");
   } catch (e) {
@@ -71,7 +73,10 @@ const getEmbeddingCached = async (text) => {
   }
 
   // Cache MISS → gọi OpenAI
-  const res = await openai.embeddings.create({ model: EMBED_MODEL, input: text });
+  const res = await openai.embeddings.create({
+    model: EMBED_MODEL,
+    input: text,
+  });
   const vector = res.data[0].embedding;
 
   try {
@@ -140,15 +145,15 @@ const TOOLS = [
   {
     type: "function",
     function: {
-      name: "get_recommendations",
+      name: "get_top_products",
       description:
-        "Lấy danh sách sản phẩm gợi ý bán chạy, phổ biến nhất. Gọi khi khách hỏi 'có gì ngon', 'sản phẩm nào bán chạy', 'gợi ý cho tôi'.",
+        "Lấy danh sách các sản phẩm bán chạy nhất, nổi bật hoặc phổ biến nhất trong cửa hàng, dựa trên số lượng đã bán thực tế. Gọi hàm này khi khách hỏi: 'có gì ngon không', 'gợi ý cho tôi', 'sản phẩm nào bán chạy nhất', 'best-seller', 'mặt hàng hot', 'hôm nay nên mua gì', 'đề xuất sản phẩm'.",
       parameters: {
         type: "object",
         properties: {
           limit: {
             type: "integer",
-            description: "Số lượng gợi ý, mặc định 5",
+            description: "Số lượng sản phẩm gợi ý, mặc định là 5",
             default: 5,
           },
         },
@@ -160,7 +165,7 @@ const TOOLS = [
     function: {
       name: "get_order_status",
       description:
-        "Tra cứu trạng thái của MỘT đơn hàng CỤ THỂ theo mã đơn. Gọi khi khách cung cấp mã đơn hàng cụ thể (VD: 'đơn 123456 của tôi đến đâu rồi').",
+        "Tra cứu đơn hàng CỤ THỂ khi khách ĐÃ CUNG CẤP mã đơn hàng trong tin nhắn (VD: 'đơn 123456 đến đâu rồi', 'mã đơn 789 của tôi'). TUYỆT ĐỐI KHÔNG gọi tool này khi khách hỏi chung chung về đơn hàng của họ mà không có mã số cụ thể.",
       parameters: {
         type: "object",
         properties: {
@@ -176,9 +181,26 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "get_active_orders",
+      description:
+        "Lấy đơn hàng ĐANG XỬ LÝ (pending/confirmed/processing/shipping) của khách. Gọi khi khách hỏi: đơn đang ở đâu, kiểm tra trạng thái, khi nào giao, đã thanh toán chưa, phương thức thanh toán, tổng tiền, sản phẩm đã đặt. KHÔNG cần mã đơn.",
+      parameters: {
+        type: "object",
+        properties: {
+          select_order_code: {
+            type: "number",
+            description: "orderCode nếu khách chọn đơn cụ thể (đơn mới nhất, đơn đầu tiên). Bỏ trống nếu chưa chọn.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_recent_orders",
       description:
-        "Lấy danh sách các đơn hàng gần nhất của khách. Gọi khi khách hỏi chung chung về đơn hàng của họ mà KHÔNG cung cấp mã cụ thể.",
+        "Lấy 5 đơn hàng gần nhất (gồm cả đã giao/hủy). Chỉ gọi khi khách hỏi LỊCH SỬ đơn hàng nói chung.",
       parameters: {
         type: "object",
         properties: {},
@@ -206,6 +228,40 @@ const TOOLS = [
   {
     type: "function",
     function: {
+      name: "get_available_vouchers",
+      description:
+        "Lấy DANH SÁCH tất cả voucher đang có hiệu lực, xếp hạng mức tiết kiệm. Gọi khi khách hỏi: có voucher nào không, mã giảm giá nào tiết kiệm nhất, đơn hàng này nên dùng voucher nào, có voucher phù hợp không.",
+      parameters: {
+        type: "object",
+        properties: {
+          order_total: {
+            type: "number",
+            description: "Tổng giá trị đơn hàng (nếu có) để tìm voucher phù hợp nhất",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_voucher_policy",
+      description:
+        "Giải thích chính sách voucher: áp dụng sản phẩm nào, sản phẩm đang giảm giá có dùng được không, đơn tối thiểu, hết hạn, có dùng nhiều voucher cùng lúc không.",
+      parameters: {
+        type: "object",
+        properties: {
+          topic: {
+            type: "string",
+            description: "Chủ đề: san_pham_giam_gia, don_toi_thieu, nhieu_voucher, pham_vi, het_han, chung",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_store_policy",
       description:
         "Lấy thông tin chính sách của cửa hàng như giao hàng, đổi trả, thanh toán, bảo hành.",
@@ -226,9 +282,8 @@ const TOOLS = [
 
 // ─── 2. Executor: Thực thi từng Tool Call ─────────────────────────────────────
 /**
- * Nhận một toolCall object từ OpenAI, thực thi hàm tương ứng, trả về chuỗi JSON kết quả.
- * @param {object} toolCall - Đối tượng tool_call từ response OpenAI
- * @param {string|null} userId - ID user đang đăng nhập (null nếu khách vãng lai)
+ * @param {object} toolCall - tool_call object từ OpenAI
+ * @param {string|null} userId  - User ID (null nếu khách)
  */
 const executeTool = async (toolCall, userId) => {
   const name = toolCall.function.name;
@@ -236,25 +291,38 @@ const executeTool = async (toolCall, userId) => {
   try {
     args = JSON.parse(toolCall.function.arguments || "{}");
   } catch {
-    console.error(
-      "[executeTool] Lỗi parse arguments:",
-      toolCall.function.arguments,
-    );
+    console.error("[executeTool] Lỗi parse arguments:", toolCall.function.arguments);
   }
 
   console.log(`[Agent] Thực thi tool: ${name}`, args);
 
   try {
     switch (name) {
-      // ── Tool: Tìm kiếm sản phẩm (Vector Search + Text Fallback) ──
+      // ── get_top_products ──
+      case "get_top_products": {
+        const { limit = 5 } = args;
+        const topProducts = await productModel.findTopSelling(limit);
+        if (topProducts && topProducts.length > 0) {
+          const result = topProducts.map((p) => ({
+            title: p.title,
+            slug: p.slug,
+            price: p.price,
+            unit: p.unit || "san pham",
+            stock: p.stock > 0 ? `Con ${p.stock} ${p.unit || ""}`.trim() : "Het hang",
+            soldCount: p.soldCount || 0,
+            discountPercentage: p.discountPercentage || 0,
+            description: stripHtml(p.description || "").substring(0, 120),
+          }));
+          return JSON.stringify({ found: result.length, products: result });
+        }
+        return JSON.stringify({ message: "Hien khong co du lieu goi y." });
+      }
+
+      // ── search_products ──
       case "search_products": {
         const { query, limit = 6 } = args;
-
-        // Bước 1: Tạo embedding có cache Redis
         const embedding = await getEmbeddingCached(query);
         let products = await productModel.findByVectorSearch(embedding, limit);
-
-        // Bước 2: Fallback sang Text Search nếu Vector Index chưa có dữ liệu
         if (!products || products.length === 0) {
           const keywords = query
             .replace(/[?!.,;:"']/g, " ")
@@ -265,7 +333,6 @@ const executeTool = async (toolCall, userId) => {
             products = await productModel.findByKeywords(keywords, { limit });
           }
         }
-
         if (products && products.length > 0) {
           const result = products.map((p) => ({
             title: p.title,
@@ -273,54 +340,24 @@ const executeTool = async (toolCall, userId) => {
             price: p.price,
             unit: p.unit,
             discountPercentage: p.discountPercentage || 0,
-            stock: p.stock > 0 ? `Còn ${p.stock} ${p.unit}` : "Hết hàng",
+            stock: p.stock > 0 ? `Con ${p.stock} ${p.unit}` : "Het hang",
             category: p.primary_category?.title || "",
             description: stripHtml(p.description).substring(0, 120),
           }));
           return JSON.stringify({ found: result.length, products: result });
         }
-        return JSON.stringify({
-          found: 0,
-          message: "Không tìm thấy sản phẩm nào phù hợp với yêu cầu.",
-        });
+        return JSON.stringify({ found: 0, message: "Khong tim thay san pham nao phu hop." });
       }
 
-      // ── Tool: Lấy gợi ý sản phẩm bán chạy từ Python Recommendation Service ──
-      case "get_recommendations": {
-        const { limit = 5 } = args;
-        const { data } = await axios.get(
-          `${env.RECOMMENDATION_SERVICE_URL}/api/product-recommendation`,
-          { params: { limit }, timeout: 4000 },
-        );
-        if (data?.recommendations?.length > 0) {
-          return JSON.stringify({
-            recommendations: data.recommendations.map((p) => ({
-              title: p.title,
-              slug: p.slug,
-            })),
-          });
-        }
-        return JSON.stringify({ message: "Hiện không có dữ liệu gợi ý." });
-      }
-
-      // ── Tool: Tra cứu đơn hàng theo mã cụ thể ──
+      // ── get_order_status (theo ma don cu the) ──
       case "get_order_status": {
         const { order_code } = args;
         const order = await orderModel.findByOrderCode(order_code);
         if (!order) {
-          return JSON.stringify({
-            message: `Không tìm thấy đơn hàng có mã ${order_code}. Vui lòng kiểm tra lại mã đơn.`,
-          });
+          return JSON.stringify({ message: `Khong tim thay don hang ma ${order_code}.` });
         }
-        // Kiểm tra quyền: chỉ cho xem đơn của chính mình
-        if (
-          userId &&
-          order.userId &&
-          order.userId.toString() !== userId.toString()
-        ) {
-          return JSON.stringify({
-            error: "Đơn hàng này không thuộc về tài khoản của bạn.",
-          });
+        if (userId && order.userId && order.userId.toString() !== userId.toString()) {
+          return JSON.stringify({ error: "Don hang nay khong thuoc tai khoan cua ban." });
         }
         return JSON.stringify({
           id: order._id.toString(),
@@ -328,53 +365,92 @@ const executeTool = async (toolCall, userId) => {
           status: ORDER_STATUS_MAP[order.status] || order.status,
           totalPrice: order.totalPrice,
           shippingFee: order.shippingFee,
+          note: "Lưu ý: totalPrice là tổng tiền CUỐI CÙNG (đã cộng phí vận chuyển). Không báo là chưa bao gồm phí.",
           createdAt: new Date(order.createdAt).toLocaleDateString("vi-VN"),
           items: (order.items || []).length,
         });
       }
 
-      // ── Tool: Lấy danh sách đơn hàng gần nhất ──
-      case "get_recent_orders": {
+      // ── get_active_orders (KHONG can ma don, tu dong tim) ──
+      case "get_active_orders": {
         if (!userId) {
           return JSON.stringify({
-            error:
-              "Bạn chưa đăng nhập. Vui lòng đăng nhập để xem lịch sử đơn hàng.",
+            requireLogin: true,
+            message: "Ban chua dang nhap. Vui long dang nhap de xem don hang dang xu ly.",
           });
         }
-        const orders = await orderModel.findByUserId(userId);
-        const recent = (orders || []).slice(0, 5);
-        if (recent.length === 0) {
-          return JSON.stringify({ message: "Bạn chưa có đơn hàng nào." });
+
+        const activeOrders = await orderModel.findActiveByUserId(userId);
+
+        if (!activeOrders || activeOrders.length === 0) {
+          return JSON.stringify({
+            count: 0,
+            message: "Ban hien khong co don hang nao dang duoc xu ly (pending/confirmed/processing/shipping).",
+          });
         }
+
+        // Neu khach chi dinh ma don cu the
+        const { select_order_code } = args;
+        if (select_order_code) {
+          const picked = activeOrders.find((o) => Number(o.orderCode) === Number(select_order_code));
+          if (picked) return JSON.stringify(formatOrderDetail(picked));
+        }
+
+        // Chi co 1 don -> tu dong chon
+        if (activeOrders.length === 1) {
+          return JSON.stringify({ count: 1, selectedOrder: formatOrderDetail(activeOrders[0]) });
+        }
+
+        // Nhieu don -> hoi khach chon
         return JSON.stringify({
-          total: recent.length,
-          orders: recent.map((o) => ({
+          count: activeOrders.length,
+          needSelection: true,
+          message: `Ban co ${activeOrders.length} don hang dang xu ly. Vui long cho biet ban muon xem don nao?`,
+          orders: activeOrders.map((o) => ({
             id: o._id.toString(),
-            orderCode: o.orderCode || o._id.toString().slice(-6),
+            orderCode: o.orderCode,
             status: ORDER_STATUS_MAP[o.status] || o.status,
             totalPrice: o.totalPrice,
+            itemCount: (o.items || []).length,
             createdAt: new Date(o.createdAt).toLocaleDateString("vi-VN"),
           })),
         });
       }
 
-      // ── Tool: Tra cứu mã giảm giá ──
+      // ── get_recent_orders (lich su don hang) ──
+      case "get_recent_orders": {
+        if (!userId) {
+          return JSON.stringify({ error: "Ban chua dang nhap. Vui long dang nhap de xem lich su don hang." });
+        }
+        const orders = await orderModel.findRecentByUserId(userId, 5);
+        if (!orders || orders.length === 0) {
+          return JSON.stringify({ message: "Ban chua co don hang nao." });
+        }
+        return JSON.stringify({
+          total: orders.length,
+          orders: orders.map((o) => ({
+            id: o._id.toString(),
+            orderCode: o.orderCode,
+            status: ORDER_STATUS_MAP[o.status] || o.status,
+            totalPrice: o.totalPrice,
+            paymentMethod: o.payment?.paymentMethod || "Chua ro",
+            createdAt: new Date(o.createdAt).toLocaleDateString("vi-VN"),
+          })),
+        });
+      }
+
+      // ── lookup_voucher (ma cu the) ──
       case "lookup_voucher": {
         const { voucher_code } = args;
         const voucher = await voucherModel.findOneByCode(voucher_code);
         if (!voucher) {
-          return JSON.stringify({
-            message: `Mã voucher "${voucher_code}" không tồn tại hoặc đã bị xóa.`,
-          });
+          return JSON.stringify({ message: `Ma voucher "${voucher_code}" khong ton tai hoac da bi xoa.` });
         }
         const now = new Date();
-        const isExpired = new Date(voucher.endDate) < now;
-        const isNotStarted = new Date(voucher.startDate) > now;
-        const isOutOfStock = voucher.quantity <= voucher.usedCount;
-        let statusText = "Còn hiệu lực";
-        if (isExpired) statusText = "Đã hết hạn";
-        else if (isNotStarted) statusText = "Chưa đến ngày áp dụng";
-        else if (isOutOfStock) statusText = "Đã hết lượt sử dụng";
+        let statusText = "Con hieu luc";
+        if (new Date(voucher.endDate) < now) statusText = "Da het han";
+        else if (new Date(voucher.startDate) > now) statusText = "Chua den ngay ap dung";
+        else if (voucher.quantity <= voucher.usedCount) statusText = "Da het luot su dung";
 
         return JSON.stringify({
           code: voucher.code,
@@ -384,55 +460,135 @@ const executeTool = async (toolCall, userId) => {
           discountValue: voucher.discountValue,
           maxDiscountAmount: voucher.maxDiscountAmount,
           minOrderValue: voucher.minOrderValue,
-          startDate: new Date(voucher.startDate).toLocaleDateString("vi-VN"),
+          applyFor: voucher.applyFor,
           endDate: new Date(voucher.endDate).toLocaleDateString("vi-VN"),
           status: statusText,
           remaining: voucher.quantity - voucher.usedCount,
         });
       }
 
-      // ── Tool: Lấy thông tin chính sách cửa hàng ──
+      // ── get_available_vouchers (tu dong kham pha) ──
+      case "get_available_vouchers": {
+        const { order_total } = args;
+        const vouchers = await voucherModel.findActiveVouchers();
+
+        if (!vouchers || vouchers.length === 0) {
+          return JSON.stringify({ message: "Hien tai chua co voucher nao dang co hieu luc." });
+        }
+
+        // Tinh so tien giam uoc tinh cho tung voucher (de xep hang)
+        const ranked = vouchers.map((v) => {
+          let estimatedDiscount = 0;
+          const base = order_total || v.minOrderValue || 0;
+          if (v.type === "money") {
+            estimatedDiscount = v.discountValue;
+          } else if (v.type === "percent") {
+            estimatedDiscount = (base * v.discountValue) / 100;
+            if (v.maxDiscountAmount) estimatedDiscount = Math.min(estimatedDiscount, v.maxDiscountAmount);
+          } else if (v.type === "freeship") {
+            estimatedDiscount = v.discountValue;
+          }
+
+          const eligible = !order_total || order_total >= v.minOrderValue;
+
+          return {
+            code: v.code,
+            name: v.name,
+            type: v.type,
+            discountValue: v.discountValue,
+            maxDiscountAmount: v.maxDiscountAmount || null,
+            minOrderValue: v.minOrderValue || 0,
+            applyFor: v.applyFor,
+            endDate: new Date(v.endDate).toLocaleDateString("vi-VN"),
+            remaining: v.quantity - v.usedCount,
+            isFeatured: v.isFeatured || false,
+            estimatedDiscount,
+            eligible,
+          };
+        }).sort((a, b) => {
+          if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
+          return b.estimatedDiscount - a.estimatedDiscount;
+        });
+
+        const eligibleList = ranked.filter((v) => v.eligible);
+        return JSON.stringify({
+          total: ranked.length,
+          eligibleCount: eligibleList.length,
+          orderTotal: order_total || null,
+          vouchers: ranked,
+          bestVoucher: eligibleList[0] || null,
+        });
+      }
+
+      // ── get_voucher_policy (chinh sach voucher) ──
+      case "get_voucher_policy": {
+        const topic = (args.topic || "chung").toLowerCase();
+        const policies = {
+          san_pham_giam_gia:
+            "Voucher SmartFood CÓ áp dụng được cho sản phẩm đang giảm giá. Hệ thống không có ràng buộc nào cấm dùng voucher trên sản phẩm đã có giảm giá. Tuy nhiên, voucher loại 'category' chỉ áp dụng cho sản phẩm thuộc danh mục được chỉ định, bất kể sản phẩm có đang giảm giá hay không.",
+          don_toi_thieu:
+            "Mỗi voucher có mức đơn tối thiểu riêng (minOrderValue). Nếu tổng giá trị các sản phẩm đủ điều kiện nhỏ hơn minOrderValue, voucher sẽ bị từ chối. Vui lòng kiểm tra điều kiện đơn tối thiểu của từng voucher cụ thể.",
+          nhieu_voucher:
+            "KHÔNG. Chính sách SmartFood chỉ cho phép áp dụng DUY NHẤT MỘT voucher cho mỗi đơn hàng. Bạn nên chọn voucher giảm nhiều nhất phù hợp với đơn hàng của mình.",
+          pham_vi:
+            "Có 2 loại phạm vi áp dụng: (1) applyFor='all' — áp dụng cho TẤT CẢ sản phẩm trong đơn hàng. (2) applyFor='category' — chỉ áp dụng cho sản phẩm thuộc DANH MỤC được chỉ định. Nếu giỏ hàng không có sản phẩm thuộc danh mục đó, voucher sẽ không hoạt động.",
+          het_han:
+            "Voucher hết hiệu lực khi: (1) Quá ngày endDate, (2) Đã dùng hết số lượt (usedCount >= quantity), (3) Admin tắt trạng thái (status = inactive). Một số voucher còn có giới hạn lượt dùng theo từng người dùng (usageLimitPerUser), mặc định là 1 lần/người.",
+          chung:
+            "Chính sách voucher SmartFood: (1) Chỉ được dùng 1 voucher cho mỗi đơn hàng. (2) Có 3 loại: giảm tiền mặt (money), giảm phần trăm (percent, có thể có mức giảm tối đa), miễn phí vận chuyển (freeship). (3) Có thể áp dụng cho tất cả sản phẩm hoặc chỉ danh mục cụ thể. (4) Có thể dùng trên sản phẩm đang giảm giá. (5) Mỗi voucher có thể có giới hạn đơn tối thiểu, giới hạn tổng lượt dùng và giới hạn lượt dùng theo từng người.",
+        };
+
+        const policy = policies[topic] || policies.chung;
+        return JSON.stringify({ topic, policy });
+      }
+
+      // ── get_store_policy ──
       case "get_store_policy": {
         const topic = (args.topic || "").toLowerCase();
         const policies = {
-          "giao hàng":
-            "SmartFood chỉ hỗ trợ giao hàng nội thành Đà Nẵng. Phí giao hàng tính tự động theo khoảng cách (không miễn phí giao hàng). Đơn đặt trước 18:00 giao trong ngày, sau 18:00 giao vào sáng hôm sau.",
-          "đổi trả":
-            "Đổi trả/hoàn tiền 100% trong 24h (hàng tươi sống xử lý trong 2h) đối với sản phẩm lỗi/hư hỏng. Gửi yêu cầu tại trang chi tiết đơn hàng hoặc liên hệ Hotline/Zalo. Shipper sẽ đến thu hồi sản phẩm miễn phí.",
-          "hoàn tiền":
-            "Thời gian hoàn tiền: Hoàn qua chuyển khoản ngân hàng (đơn COD) trong vòng 24 giờ làm việc. Đối với đơn thanh toán online qua cổng PayOS sẽ được hoàn từ 1-2 ngày làm việc.",
-          "thanh toán":
-            "SmartFood hỗ trợ 2 hình thức thanh toán: Tiền mặt khi nhận hàng (COD) và Thanh toán trực tuyến quét mã VietQR qua cổng PayOS.",
-          "hủy đơn":
-            "Khách hàng có thể hủy đơn hàng trong vòng 30 phút kể từ khi đặt thành công. Sau thời gian này, vui lòng liên hệ Hotline hoặc Zalo để được hỗ trợ.",
-          "bảo mật":
-            "Mọi dữ liệu cá nhân được mã hóa an toàn bằng chuẩn HTTPS và tuyệt đối không chia sẻ hoặc bán cho bên thứ ba vì mục đích thương mại.",
+          "giao hang": "SmartFood chi ho tro giao hang noi thanh Da Nang. Phi giao hang tinh tu dong theo khoang cach (khong mien phi). Don dat truoc 18:00 giao trong ngay, sau 18:00 giao sang hom sau.",
+          "doi tra": "Doi tra/hoan tien 100% trong 24h (hang tuoi song 2h) doi voi san pham loi/hu hong. Gui yeu cau tai trang chi tiet don hang hoac lien he Hotline/Zalo.",
+          "hoan tien": "Hoan qua chuyen khoan ngan hang (don COD) trong 24h lam viec. Don PayOS hoan 1-2 ngay lam viec.",
+          "thanh toan": "SmartFood ho tro: Tien mat khi nhan hang (COD) va Thanh toan truc tuyen VietQR qua PayOS.",
+          "huy don": "Khach co the huy don trong 30 phut ke tu khi dat thanh cong. Sau thoi gian nay, lien he Hotline hoac Zalo.",
+          "bao mat": "Du lieu ca nhan ma hoa HTTPS, tuyet doi khong chia se voi ben thu ba.",
         };
-
         for (const key in policies) {
           if (topic.includes(key)) {
             return JSON.stringify({ topic: key, policy: policies[key] });
           }
         }
-        return JSON.stringify({
-          topic: "chung",
-          policy:
-            "Vui lòng xem chi tiết trên website hoặc liên hệ Hotline/Zalo để được hỗ trợ. Các chính sách chính: Giao hàng nội thành Đà Nẵng, thanh toán COD/PayOS, và đổi trả lỗi trong 24h.",
-        });
+        return JSON.stringify({ topic: "chung", policy: "Vui long xem chi tiet tren website hoac lien he Hotline/Zalo. Chinh sach: Giao hang noi thanh Da Nang, thanh toan COD/PayOS, doi tra loi trong 24h." });
       }
 
       default:
-        return JSON.stringify({
-          error: `Tool "${name}" không được nhận dạng.`,
-        });
+        return JSON.stringify({ error: `Tool "${name}" khong duoc nhan dang.` });
     }
   } catch (err) {
-    console.error(`[executeTool:${name}] Lỗi:`, err.message);
-    return JSON.stringify({
-      error: `Lỗi khi thực thi ${name}: ${err.message}`,
-    });
+    console.error(`[executeTool:${name}] Loi:`, err.message);
+    return JSON.stringify({ error: `Loi khi thuc thi ${name}: ${err.message}` });
   }
 };
+
+// ─── Helper: format chi tiet don hang ────────────────────────────────────────
+const formatOrderDetail = (order) => ({
+  id: order._id.toString(),
+  orderCode: order.orderCode,
+  status: ORDER_STATUS_MAP[order.status] || order.status,
+  totalPrice: order.totalPrice,
+  shippingFee: order.shippingFee,
+  discountVoucher: order.discountVoucher || 0,
+  voucherCode: order.voucherCode || null,
+  createdAt: new Date(order.createdAt).toLocaleDateString("vi-VN"),
+  address: order.userInfo ? `${order.userInfo.address}, ${order.userInfo.ward}, ${order.userInfo.district}, ${order.userInfo.province}` : null,
+  paymentMethod: order.payment?.paymentMethod || null,
+  paymentStatus: order.payment?.status || null,
+  items: (order.items || []).map((item) => ({
+    title: item.title,
+    quantity: item.quantity,
+    price: item.price,
+  })),
+});
 
 // ─── 3. System Prompt ─────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `Bạn là trợ lý AI của SmartFood — hệ thống bán lẻ thực phẩm tươi sạch, an toàn, tiết kiệm.
@@ -458,14 +614,18 @@ const SYSTEM_PROMPT = `Bạn là trợ lý AI của SmartFood — hệ thống b
 - Khi từ chối, hãy sử dụng một câu trả lời lịch sự, ngắn gọn và hướng người dùng quay lại chủ đề của SmartFood (ví dụ: "Xin lỗi, tôi chỉ có thể hỗ trợ các thông tin liên quan đến sản phẩm, dịch vụ và chính sách của SmartFood. Tôi có thể giúp gì cho bạn về mua sắm hôm nay không?").
 
 ## Quy tắc sử dụng Tools
-- Khi khách hỏi về SẢN PHẨM hay NGUYÊN LIỆU: LUÔN gọi tool "search_products" trước để lấy dữ liệu thực.
-- Khi khách hỏi về CHẾ ĐỘ ĂN UỐNG, TƯ VẤN DINH DƯỠNG hoặc CÁC THỰC PHẨM tốt cho sức khỏe/giảm cân/tăng cơ: LUÔN gọi tool "search_products" với các từ khóa liên quan (như "rau xanh", "ức gà", "yến mạch", "trái cây", v.v.) để lấy danh sách sản phẩm THỰC TẾ của cửa hàng, tuyệt đối không tự bịa thông tin.
-- Khi khách hỏi CÔNG THỨC NẤU ĂN: Cung cấp công thức, ĐỒNG THỜI gọi "search_products" để kiểm tra nguyên liệu SmartFood có bán không và gợi ý.
-- Khi khách cung cấp MÃ ĐƠN HÀNG cụ thể: gọi "get_order_status".
-- Khi khách hỏi chung về ĐƠN HÀNG của họ: gọi "get_recent_orders".
-- Khi khách hỏi về MÃ VOUCHER cụ thể: gọi "lookup_voucher".
-- Khi khách hỏi về CHÍNH SÁCH: gọi "get_store_policy".
-- Khi câu hỏi là chào hỏi xã giao hoặc chúc mừng: Trả lời thân thiện, lịch sự và ngắn gọn, KHÔNG cần gọi tool.
+- Khi khách yêu cầu GỢI Ý SẢN PHẨM hoặc HÀNG BÁN CHẠY: gọi "get_top_products".
+- Khi khách hỏi về SẢN PHẨM hay NGUYÊN LIỆU: LUÔN gọi "search_products" trước.
+- Khi khách hỏi CHẾ ĐỘ ĂN UỐNG, DINH DƯỠNG: gọi "search_products" với từ khóa liên quan.
+- Khi khách hỏi CÔNG THỨC NẤU ĂN: Cung cấp công thức VÀ gọi "search_products" để gợi ý nguyên liệu.
+- Khi khách cung cấp MÃ ĐƠN HÀNG cụ thể (số) trong tin nhắn: gọi "get_order_status".
+- Khi khách hỏi về TRẠNG THÁI ĐƠN HÀNG, ĐƠN ĐANG XỬ LÝ, KHI NÀO GIAO, SẢN PHẨM ĐÃ ĐẶT, ĐÃ THANH TOÁN CHƯA, PHƯƠNG THỨC THANH TOÁN, TỔNG TIỀN ĐƠN mà KHÔNG có mã đơn: LUÔN LUÔN gọi "get_active_orders" ngay lập tức — TUYỆT ĐỐI KHÔNG tự hỏi lại mã đơn, KHÔNG tự trả lời "vui lòng cung cấp mã đơn". Tool get_active_orders sẽ tự xử lý trường hợp chưa đăng nhập.
+- Khi khách hỏi VỀ LỊCH SỬ đơn hàng nói chung (đã giao, đã hủy,...): gọi "get_recent_orders".
+- Khi khách hỏi về MÃ VOUCHER cụ thể (VD: SALE50 còn hiệu lực không): gọi "lookup_voucher".
+- Khi khách hỏi DANH SÁCH VOUCHER, CÓ VOUCHER NÀO KHÔNG, VOUCHER TIẾT KIỆM NHẤT, VOUCHER PHÙ HỢP: gọi "get_available_vouchers".
+- Khi khách hỏi về QUY TẮC VOUCHER (áp dụng cho sản phẩm giảm giá không, dùng nhiều voucher không, đơn tối thiểu, phạm vi áp dụng): gọi "get_voucher_policy".
+- Khi khách hỏi về CHÍNH SÁCH CỬA HÀNG (giao hàng, đổi trả, thanh toán): gọi "get_store_policy".
+- Khi câu hỏi là chào hỏi xã giao: Trả lời thân thiện, KHÔNG cần gọi tool.
 
 ## Quy tắc hiển thị kết quả
 - TUYỆT ĐỐI KHÔNG bịa tên sản phẩm, giá, thông tin không có trong kết quả tool.
@@ -473,7 +633,7 @@ const SYSTEM_PROMPT = `Bạn là trợ lý AI của SmartFood — hệ thống b
   - TUYỆT ĐỐI KHÔNG thêm domain (http/https) vào link. CHỈ DÙNG "/product/slug".
   - Đúng: [Thịt Bò Úc Nhập Khẩu](/product/thit-bo-uc)
   - Sai: [Thịt Bò Úc](https://smartfood.vn/product/thit-bo-uc)
-  - TUYỆT ĐỐI KHÔNG tự tạo link cho các danh mục chung chung (VD: không tạo link kiểu [Rau xanh](/product/rau-xanh) hay [Trái cây](/product/trai-cay)) nếu trong kết quả của tool không trả về sản phẩm cụ thể có slug đó. Chỉ gắn link cho sản phẩm thực tế có slug hợp lệ được trả về từ tool "search_products" hoặc "get_recommendations".
+  - TUYỆT ĐỐI KHÔNG tự tạo link cho các danh mục chung chung (VD: không tạo link kiểu [Rau xanh](/product/rau-xanh) hay [Trái cây](/product/trai-cay)) nếu trong kết quả của tool không trả về sản phẩm cụ thể có slug đó. Chỉ gắn link cho sản phẩm thực tế có slug hợp lệ được trả về từ tool "search_products" hoặc "get_top_products".
 - MỌI ĐƠN HÀNG phải dùng định dạng link Markdown TƯƠNG ĐỐI: [Mã đơn: <orderCode>](/order/<id>)
   - Bắt buộc dùng trường "id" (chuỗi 24 ký tự) trả về từ kết quả để gắn link (/order/<id>).
   - Bắt buộc dùng trường "orderCode" (ví dụ: 742962321) để hiển thị tên mã đơn hàng.
@@ -498,6 +658,8 @@ const sendMessage = async ({ message, sessionId, userId = null }) => {
   // Lưu/tạo session trong MongoDB
   await chatbotMessageModel.upsertSession({ sessionId, userId });
   const session = await chatbotMessageModel.findSession({ sessionId, userId });
+  // Lấy orderContext từ session để hỗ trợ hội thoại đơn hàng liên tục
+  const sessionOrderCtx = session?.orderContext || null;
 
   // Lịch sử hội thoại — giữ 10 tin nhắn gần nhất để tiết kiệm token
   const history = (session?.messages || [])
@@ -666,9 +828,19 @@ const invalidateProductCache = () => {
  * @param {string|null} params.userId - User ID (null nếu khách vãng lai)
  * @param {object} params.res       - Express Response object (để ghi SSE)
  */
-const sendMessageStream = async ({ message, sessionId, userId = null, res }) => {
-  if (!message?.trim()) throw new ApiError(StatusCodes.BAD_REQUEST, "Tin nhắn không được để trống!");
-  if (!sessionId) throw new ApiError(StatusCodes.BAD_REQUEST, "SessionId là bắt buộc!");
+const sendMessageStream = async ({
+  message,
+  sessionId,
+  userId = null,
+  res,
+}) => {
+  if (!message?.trim())
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "Tin nhắn không được để trống!",
+    );
+  if (!sessionId)
+    throw new ApiError(StatusCodes.BAD_REQUEST, "SessionId là bắt buộc!");
 
   // Thiết lập headers SSE
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -681,9 +853,10 @@ const sendMessageStream = async ({ message, sessionId, userId = null, res }) => 
   const emit = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
   try {
-    // Lấy lịch sử hội thoại
+    // Lấy lịch sử hội thoại và orderContext
     await chatbotMessageModel.upsertSession({ sessionId, userId });
     const session = await chatbotMessageModel.findSession({ sessionId, userId });
+    const sessionOrderCtx = session?.orderContext || null;
     const history = (session?.messages || [])
       .slice(-10)
       .map((m) => ({ role: m.role, content: m.content }));
@@ -715,7 +888,12 @@ const sendMessageStream = async ({ message, sessionId, userId = null, res }) => 
       const toolResults = await Promise.all(
         toolCalls.map(async (toolCall) => {
           const output = await executeTool(toolCall, userId);
-          return { tool_call_id: toolCall.id, role: "tool", name: toolCall.function.name, content: output };
+          return {
+            tool_call_id: toolCall.id,
+            role: "tool",
+            name: toolCall.function.name,
+            content: output,
+          };
         }),
       );
       messages.push(...toolResults);
@@ -745,7 +923,6 @@ const sendMessageStream = async ({ message, sessionId, userId = null, res }) => 
         { role: "assistant", content: aiReply, createdAt: now },
       ]);
       emit({ type: "done", sessionId });
-
     } else {
       // Không có tool → stream trực tiếp câu trả lời ngắn
       const stream = await openai.chat.completions.create({
@@ -772,7 +949,6 @@ const sendMessageStream = async ({ message, sessionId, userId = null, res }) => 
       ]);
       emit({ type: "done", sessionId });
     }
-
   } catch (err) {
     console.error("[sendMessageStream] Lỗi:", err.message);
     emit({ type: "error", message: "Không thể kết nối AI, vui lòng thử lại!" });

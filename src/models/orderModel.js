@@ -202,6 +202,103 @@ const findByOrderCode = async (orderCode) => {
     throw new Error(error);
   }
 };
+
+/**
+ * Chatbot: Lấy các đơn hàng đang hoạt động (chưa hoàn thành) của user.
+ * Chỉ lấy đúng các trường cần thiết để tối ưu băng thông + thời gian.
+ */
+const findActiveByUserId = async (userId) => {
+  try {
+    const ACTIVE_STATUSES = ['pending', 'confirmed', 'processing', 'shipping'];
+    return await GET_DB()
+      .collection(ORDER_COLLECTION_NAME)
+      .aggregate([
+        {
+          $match: {
+            userId: new ObjectId(userId),
+            status: { $in: ACTIVE_STATUSES },
+          },
+        },
+        { $sort: { createdAt: -1 } },
+        {
+          $lookup: {
+            from: 'order_items',
+            localField: '_id',
+            foreignField: 'orderId',
+            as: 'items',
+            pipeline: [
+              { $project: { title: 1, quantity: 1, price: 1, thumbnail: 1 } },
+            ],
+          },
+        },
+        {
+          $lookup: {
+            from: 'payments',
+            localField: '_id',
+            foreignField: 'orderId',
+            as: 'payment',
+            pipeline: [
+              { $project: { paymentMethod: 1, status: 1, amount: 1 } },
+            ],
+          },
+        },
+        {
+          $addFields: { payment: { $arrayElemAt: ['$payment', 0] } },
+        },
+        {
+          $project: {
+            orderCode: 1,
+            status: 1,
+            totalPrice: 1,
+            shippingFee: 1,
+            discountVoucher: 1,
+            voucherCode: 1,
+            createdAt: 1,
+            userInfo: 1,
+            items: 1,
+            payment: 1,
+          },
+        },
+      ])
+      .toArray();
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
+/**
+ * Chatbot: Lấy chi tiết một đơn hàng đã giao/hoàn thành gần nhất của user.
+ */
+const findRecentByUserId = async (userId, limit = 5) => {
+  try {
+    return await GET_DB()
+      .collection(ORDER_COLLECTION_NAME)
+      .aggregate([
+        { $match: { userId: new ObjectId(userId) } },
+        { $sort: { createdAt: -1 } },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: 'payments',
+            localField: '_id',
+            foreignField: 'orderId',
+            as: 'payment',
+            pipeline: [{ $project: { paymentMethod: 1, status: 1 } }],
+          },
+        },
+        { $addFields: { payment: { $arrayElemAt: ['$payment', 0] } } },
+        {
+          $project: {
+            orderCode: 1, status: 1, totalPrice: 1,
+            createdAt: 1, payment: 1,
+          },
+        },
+      ])
+      .toArray();
+  } catch (error) {
+    throw new Error(error);
+  }
+};
 //  tìm ra danh sách các đơn hàng thanh toán qua PayOS đã quá hạn (mặc định là quá 30 phút) nhưng vẫn chưa hoàn tất thanh toán.
 const findPendingPayOSOrdersOlderThan = async (olderThanMinutes = 30) => {
   try {
@@ -458,4 +555,6 @@ export const orderModel = {
   countAdminOrders,
   getAdminOrderDetail,
   updateAdminStatus,
+  findActiveByUserId,
+  findRecentByUserId,
 };

@@ -46,7 +46,11 @@ const isAuthorizedOptional = async (req, res, next) => {
     }
     next()
   } catch (error) {
-    next() // Ignore auth error if optional
+    if (error?.message?.includes('jwt expired')) {
+      return next(new ApiError(StatusCodes.GONE, 'Access token đã hết hạn, cần làm mới token.'))
+    }
+    // Ignore other auth errors (invalid token, malformed) to fallback to guest
+    next()
   }
 }
 
