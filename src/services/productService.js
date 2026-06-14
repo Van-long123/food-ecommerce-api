@@ -9,7 +9,7 @@ import ApiError from "~/utils/ApiError";
 import { slugify } from "~/utils/formatters";
 import { parseBool, parseNum } from "~/utils/parsers";
 import { CloudinaryProvider } from "~/providers/CloudinaryProvider";
-import { evaluateReviewModeration } from "~/utils/reviewModeration";
+import { reviewModerationService } from "~/services/reviewModerationService";
 import { embeddingService } from "~/services/embeddingService";
 
 // Helper: generate unique slug
@@ -372,7 +372,8 @@ const update = async (id, reqBody, actorId, files = null) => {
         unit: reqBody.unit ?? product.unit,
       };
 
-      const vector = await embeddingService.generateProductVector(embeddingSource);
+      const vector =
+        await embeddingService.generateProductVector(embeddingSource);
       if (vector) {
         updateData.embeddingVector = vector;
         updateData.embeddedAt = new Date();
@@ -593,10 +594,12 @@ const getDetailClient = async (slug) => {
 
 const createReviewClient = async (slug, reqBody, userId) => {
   try {
+    // 1. Tìm sản phẩm theo Slug hoặc ID
     const product = await productModel.findOneBySlugOrId(slug);
     if (!product)
       throw new ApiError(StatusCodes.NOT_FOUND, "Không tìm thấy sản phẩm!");
 
+    // 2. Lấy danh sách các đơn hàng đã được giao thành công (delivered) chứa sản phẩm này của User
     const deliveredOrderIds = await orderModel.listDeliveredOrderIdsByProduct(
       userId,
       product._id.toString(),
@@ -608,6 +611,8 @@ const createReviewClient = async (slug, reqBody, userId) => {
       );
     }
 
+    // Mỗi lần mua hàng thành công (1 đơn hàng), khách hàng sẽ có 1 lượt đánh giá
+    // 3. Tìm xem user đã từng viết đánh giá cho sản phẩm này chưa
     const existingReview = await reviewModel.findOneByUserAndProduct(
       product._id.toString(),
       userId,
@@ -615,9 +620,12 @@ const createReviewClient = async (slug, reqBody, userId) => {
     const reviewedOrderIds = Array.isArray(existingReview?.orderIds)
       ? existingReview.orderIds.map((id) => id.toString())
       : [];
+
+    // Tìm đơn hàng đã giao nào mà chưa được liên kết với đánh giá (chưa review)
     const targetOrderId =
       deliveredOrderIds.find((id) => !reviewedOrderIds.includes(id)) || null;
 
+    // Nếu không tìm thấy đơn hàng nào chưa đánh giá (tức là mua 2 lần đánh giá cả 2 lần rồi)
     if (!targetOrderId) {
       throw new ApiError(
         StatusCodes.BAD_REQUEST,
@@ -625,17 +633,25 @@ const createReviewClient = async (slug, reqBody, userId) => {
       );
     }
 
+    // 4. Chuẩn hóa dữ liệu review nhận từ client gửi lên
     const normalizedReview = {
       rating: reqBody.rating,
       comment: reqBody.comment || "",
       images: Array.isArray(reqBody.images) ? reqBody.images : [],
     };
 
-    const moderationResult = evaluateReviewModeration(normalizedReview);
+    // 5. Chạy luồng kiểm duyệt tự động (Layer 1: Từ cấm, Layer 2: OpenAI Vision AI)
+    const user = await userModel.findOneById(userId);
+    const moderationResult = await reviewModerationService.evaluateReview(
+      normalizedReview,
+      user,
+    );
     const nextStatus = moderationResult.status;
     const rejectReason = moderationResult.reason;
 
+    // 6. Ghi dữ liệu vào Database
     if (existingReview) {
+      // Nếu đã từng có đánh giá trước đó: Tiến hành CẬP NHẬT (Update) nội dung và gộp ID đơn hàng mới vào
       await reviewModel.updateReview(
         existingReview._id.toString(),
         {
@@ -648,6 +664,7 @@ const createReviewClient = async (slug, reqBody, userId) => {
         targetOrderId,
       );
     } else {
+      // Nếu chưa có đánh giá: Tiến hành TẠO MỚI (Create) một bản ghi đánh giá
       const newReview = {
         productId: product._id.toString(),
         userId,
@@ -663,6 +680,8 @@ const createReviewClient = async (slug, reqBody, userId) => {
       await reviewModel.createNew(newReview);
     }
 
+    // 7. Đồng bộ lại điểm số trung bình (ratings) của sản phẩm
+    // Chỉ đồng bộ khi review mới được duyệt (approved) hoặc review cũ từng được duyệt (cần cập nhật lại điểm)
     const shouldSyncRatings =
       nextStatus === reviewModel.REVIEW_STATUSES.APPROVED ||
       existingReview?.status === reviewModel.REVIEW_STATUSES.APPROVED;

@@ -10,4 +10,13 @@ const uploadEditorImage = async (req, res, next) => {
   }
 }
 
-export const uploadController = { uploadEditorImage }
+const uploadReviewImages = async (req, res, next) => {
+  try {
+    const result = await uploadService.uploadReviewImages(req.files)
+    res.status(StatusCodes.OK).json(result)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const uploadController = { uploadEditorImage, uploadReviewImages }

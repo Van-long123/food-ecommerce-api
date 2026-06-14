@@ -13,4 +13,12 @@ Router.post(
   uploadController.uploadEditorImage
 )
 
+// Upload ảnh review (khách hàng đã đăng nhập, tối đa 3 ảnh)
+Router.post(
+  '/review-images',
+  authMiddleware.isAuthorized,
+  multerUploadMiddleware.upload.array('images', 3),
+  uploadController.uploadReviewImages
+)
+
 export const uploadRoute = Router

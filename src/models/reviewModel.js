@@ -284,6 +284,20 @@ const getDetailAdmin = async (reviewId) => {
   }
 };
 
+const countRejectedByUser = async (userId) => {
+  try {
+    if (!ObjectId.isValid(userId)) return 0;
+    return await GET_DB()
+      .collection(REVIEW_COLLECTION_NAME)
+      .countDocuments({
+        userId: new ObjectId(userId),
+        status: REVIEW_STATUSES.REJECTED
+      });
+  } catch (error) {
+    throw new Error(error);
+  }
+};
+
 export const reviewModel = {
   REVIEW_STATUSES,
   REVIEW_COLLECTION_NAME,
@@ -293,4 +307,5 @@ export const reviewModel = {
   findOneById,
   getAdminList,
   getDetailAdmin,
+  countRejectedByUser,
 };

@@ -1,0 +1,7 @@
+export const REVIEW_CONFIG = {
+  MODERATION: {
+    MAX_COMMENT_LENGTH: 100,
+    NEW_USER_DAYS: 7,
+    MAX_REJECTED_REVIEWS: 2
+  }
+};
