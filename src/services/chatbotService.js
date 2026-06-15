@@ -1,6 +1,5 @@
 /**
  * chatbotService.js
- * ─────────────────────────────────────────────────────────────────────────────
  * Kiến trúc: AI Agent sử dụng OpenAI Function Calling (Tool Calling)
  *
  * Luồng hoạt động (Agentic Loop):
@@ -9,7 +8,6 @@
  *   3. Nếu có tool_calls → thực thi song song (Promise.all) → lấy dữ liệu DB/API
  *   4. Gọi OpenAI lần 2 kèm kết quả tool → AI tổng hợp câu trả lời tự nhiên
  *   5. Lưu lịch sử MongoDB → trả về response
- * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import OpenAI from "openai";
@@ -23,12 +21,12 @@ import { voucherModel } from "~/models/voucherModel";
 import ApiError from "~/utils/ApiError";
 import { StatusCodes } from "http-status-codes";
 
-// ─── OpenAI Client ────────────────────────────────────────────────────────────
-const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
-const GPT_MODEL = "gpt-4o-mini";
-const EMBED_MODEL = "text-embedding-3-small"; // 1536 chiều
+import { GPT_MODEL, EMBED_MODEL } from "~/constants/aiConfig";
 
-// ─── Redis Client (Embedding Cache) ──────────────────────────────────────────
+//  OpenAI Client
+const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
+
+//  Redis Client (Embedding Cache)
 import { createClient } from "redis";
 
 let redisClient = null;
@@ -92,7 +90,7 @@ const getEmbeddingCached = async (text) => {
   return vector;
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+//  Helpers
 
 /** Loại bỏ thẻ HTML từ TinyMCE trước khi nhét vào context */
 const stripHtml = (html) =>
@@ -116,7 +114,7 @@ const ORDER_STATUS_MAP = {
   returned: "Trả hàng",
 };
 
-// ─── 1. Khai báo Tools (JSON Schema chuẩn OpenAI) ─────────────────────────────
+//  1. Khai báo Tools (JSON Schema chuẩn OpenAI)
 const TOOLS = [
   {
     type: "function",
@@ -189,7 +187,8 @@ const TOOLS = [
         properties: {
           select_order_code: {
             type: "number",
-            description: "orderCode nếu khách chọn đơn cụ thể (đơn mới nhất, đơn đầu tiên). Bỏ trống nếu chưa chọn.",
+            description:
+              "orderCode nếu khách chọn đơn cụ thể (đơn mới nhất, đơn đầu tiên). Bỏ trống nếu chưa chọn.",
           },
         },
       },
@@ -236,7 +235,8 @@ const TOOLS = [
         properties: {
           order_total: {
             type: "number",
-            description: "Tổng giá trị đơn hàng (nếu có) để tìm voucher phù hợp nhất",
+            description:
+              "Tổng giá trị đơn hàng (nếu có) để tìm voucher phù hợp nhất",
           },
         },
       },
@@ -253,7 +253,8 @@ const TOOLS = [
         properties: {
           topic: {
             type: "string",
-            description: "Chủ đề: san_pham_giam_gia, don_toi_thieu, nhieu_voucher, pham_vi, het_han, chung",
+            description:
+              "Chủ đề: san_pham_giam_gia, don_toi_thieu, nhieu_voucher, pham_vi, het_han, chung",
           },
         },
       },
@@ -280,7 +281,7 @@ const TOOLS = [
   },
 ];
 
-// ─── 2. Executor: Thực thi từng Tool Call ─────────────────────────────────────
+//  2. Executor: Thực thi từng Tool Call
 /**
  * @param {object} toolCall - tool_call object từ OpenAI
  * @param {string|null} userId  - User ID (null nếu khách)
@@ -291,7 +292,10 @@ const executeTool = async (toolCall, userId) => {
   try {
     args = JSON.parse(toolCall.function.arguments || "{}");
   } catch {
-    console.error("[executeTool] Lỗi parse arguments:", toolCall.function.arguments);
+    console.error(
+      "[executeTool] Lỗi parse arguments:",
+      toolCall.function.arguments,
+    );
   }
 
   console.log(`[Agent] Thực thi tool: ${name}`, args);
@@ -308,7 +312,10 @@ const executeTool = async (toolCall, userId) => {
             slug: p.slug,
             price: p.price,
             unit: p.unit || "san pham",
-            stock: p.stock > 0 ? `Con ${p.stock} ${p.unit || ""}`.trim() : "Het hang",
+            stock:
+              p.stock > 0
+                ? `Con ${p.stock} ${p.unit || ""}`.trim()
+                : "Het hang",
             soldCount: p.soldCount || 0,
             discountPercentage: p.discountPercentage || 0,
             description: stripHtml(p.description || "").substring(0, 120),
@@ -346,7 +353,10 @@ const executeTool = async (toolCall, userId) => {
           }));
           return JSON.stringify({ found: result.length, products: result });
         }
-        return JSON.stringify({ found: 0, message: "Khong tim thay san pham nao phu hop." });
+        return JSON.stringify({
+          found: 0,
+          message: "Khong tim thay san pham nao phu hop.",
+        });
       }
 
       // ── get_order_status (theo ma don cu the) ──
@@ -354,10 +364,18 @@ const executeTool = async (toolCall, userId) => {
         const { order_code } = args;
         const order = await orderModel.findByOrderCode(order_code);
         if (!order) {
-          return JSON.stringify({ message: `Khong tim thay don hang ma ${order_code}.` });
+          return JSON.stringify({
+            message: `Khong tim thay don hang ma ${order_code}.`,
+          });
         }
-        if (userId && order.userId && order.userId.toString() !== userId.toString()) {
-          return JSON.stringify({ error: "Don hang nay khong thuoc tai khoan cua ban." });
+        if (
+          userId &&
+          order.userId &&
+          order.userId.toString() !== userId.toString()
+        ) {
+          return JSON.stringify({
+            error: "Don hang nay khong thuoc tai khoan cua ban.",
+          });
         }
         return JSON.stringify({
           id: order._id.toString(),
@@ -376,7 +394,8 @@ const executeTool = async (toolCall, userId) => {
         if (!userId) {
           return JSON.stringify({
             requireLogin: true,
-            message: "Ban chua dang nhap. Vui long dang nhap de xem don hang dang xu ly.",
+            message:
+              "Ban chua dang nhap. Vui long dang nhap de xem don hang dang xu ly.",
           });
         }
 
@@ -385,20 +404,26 @@ const executeTool = async (toolCall, userId) => {
         if (!activeOrders || activeOrders.length === 0) {
           return JSON.stringify({
             count: 0,
-            message: "Ban hien khong co don hang nao dang duoc xu ly (pending/confirmed/processing/shipping).",
+            message:
+              "Ban hien khong co don hang nao dang duoc xu ly (pending/confirmed/processing/shipping).",
           });
         }
 
         // Neu khach chi dinh ma don cu the
         const { select_order_code } = args;
         if (select_order_code) {
-          const picked = activeOrders.find((o) => Number(o.orderCode) === Number(select_order_code));
+          const picked = activeOrders.find(
+            (o) => Number(o.orderCode) === Number(select_order_code),
+          );
           if (picked) return JSON.stringify(formatOrderDetail(picked));
         }
 
         // Chi co 1 don -> tu dong chon
         if (activeOrders.length === 1) {
-          return JSON.stringify({ count: 1, selectedOrder: formatOrderDetail(activeOrders[0]) });
+          return JSON.stringify({
+            count: 1,
+            selectedOrder: formatOrderDetail(activeOrders[0]),
+          });
         }
 
         // Nhieu don -> hoi khach chon
@@ -420,7 +445,10 @@ const executeTool = async (toolCall, userId) => {
       // ── get_recent_orders (lich su don hang) ──
       case "get_recent_orders": {
         if (!userId) {
-          return JSON.stringify({ error: "Ban chua dang nhap. Vui long dang nhap de xem lich su don hang." });
+          return JSON.stringify({
+            error:
+              "Ban chua dang nhap. Vui long dang nhap de xem lich su don hang.",
+          });
         }
         const orders = await orderModel.findRecentByUserId(userId, 5);
         if (!orders || orders.length === 0) {
@@ -444,13 +472,17 @@ const executeTool = async (toolCall, userId) => {
         const { voucher_code } = args;
         const voucher = await voucherModel.findOneByCode(voucher_code);
         if (!voucher) {
-          return JSON.stringify({ message: `Ma voucher "${voucher_code}" khong ton tai hoac da bi xoa.` });
+          return JSON.stringify({
+            message: `Ma voucher "${voucher_code}" khong ton tai hoac da bi xoa.`,
+          });
         }
         const now = new Date();
         let statusText = "Con hieu luc";
         if (new Date(voucher.endDate) < now) statusText = "Da het han";
-        else if (new Date(voucher.startDate) > now) statusText = "Chua den ngay ap dung";
-        else if (voucher.quantity <= voucher.usedCount) statusText = "Da het luot su dung";
+        else if (new Date(voucher.startDate) > now)
+          statusText = "Chua den ngay ap dung";
+        else if (voucher.quantity <= voucher.usedCount)
+          statusText = "Da het luot su dung";
 
         return JSON.stringify({
           code: voucher.code,
@@ -473,42 +505,50 @@ const executeTool = async (toolCall, userId) => {
         const vouchers = await voucherModel.findActiveVouchers();
 
         if (!vouchers || vouchers.length === 0) {
-          return JSON.stringify({ message: "Hien tai chua co voucher nao dang co hieu luc." });
+          return JSON.stringify({
+            message: "Hien tai chua co voucher nao dang co hieu luc.",
+          });
         }
 
         // Tinh so tien giam uoc tinh cho tung voucher (de xep hang)
-        const ranked = vouchers.map((v) => {
-          let estimatedDiscount = 0;
-          const base = order_total || v.minOrderValue || 0;
-          if (v.type === "money") {
-            estimatedDiscount = v.discountValue;
-          } else if (v.type === "percent") {
-            estimatedDiscount = (base * v.discountValue) / 100;
-            if (v.maxDiscountAmount) estimatedDiscount = Math.min(estimatedDiscount, v.maxDiscountAmount);
-          } else if (v.type === "freeship") {
-            estimatedDiscount = v.discountValue;
-          }
+        const ranked = vouchers
+          .map((v) => {
+            let estimatedDiscount = 0;
+            const base = order_total || v.minOrderValue || 0;
+            if (v.type === "money") {
+              estimatedDiscount = v.discountValue;
+            } else if (v.type === "percent") {
+              estimatedDiscount = (base * v.discountValue) / 100;
+              if (v.maxDiscountAmount)
+                estimatedDiscount = Math.min(
+                  estimatedDiscount,
+                  v.maxDiscountAmount,
+                );
+            } else if (v.type === "freeship") {
+              estimatedDiscount = v.discountValue;
+            }
 
-          const eligible = !order_total || order_total >= v.minOrderValue;
+            const eligible = !order_total || order_total >= v.minOrderValue;
 
-          return {
-            code: v.code,
-            name: v.name,
-            type: v.type,
-            discountValue: v.discountValue,
-            maxDiscountAmount: v.maxDiscountAmount || null,
-            minOrderValue: v.minOrderValue || 0,
-            applyFor: v.applyFor,
-            endDate: new Date(v.endDate).toLocaleDateString("vi-VN"),
-            remaining: v.quantity - v.usedCount,
-            isFeatured: v.isFeatured || false,
-            estimatedDiscount,
-            eligible,
-          };
-        }).sort((a, b) => {
-          if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
-          return b.estimatedDiscount - a.estimatedDiscount;
-        });
+            return {
+              code: v.code,
+              name: v.name,
+              type: v.type,
+              discountValue: v.discountValue,
+              maxDiscountAmount: v.maxDiscountAmount || null,
+              minOrderValue: v.minOrderValue || 0,
+              applyFor: v.applyFor,
+              endDate: new Date(v.endDate).toLocaleDateString("vi-VN"),
+              remaining: v.quantity - v.usedCount,
+              isFeatured: v.isFeatured || false,
+              estimatedDiscount,
+              eligible,
+            };
+          })
+          .sort((a, b) => {
+            if (a.eligible !== b.eligible) return a.eligible ? -1 : 1;
+            return b.estimatedDiscount - a.estimatedDiscount;
+          });
 
         const eligibleList = ranked.filter((v) => v.eligible);
         return JSON.stringify({
@@ -546,31 +586,45 @@ const executeTool = async (toolCall, userId) => {
       case "get_store_policy": {
         const topic = (args.topic || "").toLowerCase();
         const policies = {
-          "giao hang": "SmartFood chi ho tro giao hang noi thanh Da Nang. Phi giao hang tinh tu dong theo khoang cach (khong mien phi). Don dat truoc 18:00 giao trong ngay, sau 18:00 giao sang hom sau.",
-          "doi tra": "Doi tra/hoan tien 100% trong 24h (hang tuoi song 2h) doi voi san pham loi/hu hong. Gui yeu cau tai trang chi tiet don hang hoac lien he Hotline/Zalo.",
-          "hoan tien": "Hoan qua chuyen khoan ngan hang (don COD) trong 24h lam viec. Don PayOS hoan 1-2 ngay lam viec.",
-          "thanh toan": "SmartFood ho tro: Tien mat khi nhan hang (COD) va Thanh toan truc tuyen VietQR qua PayOS.",
-          "huy don": "Khach co the huy don trong 30 phut ke tu khi dat thanh cong. Sau thoi gian nay, lien he Hotline hoac Zalo.",
-          "bao mat": "Du lieu ca nhan ma hoa HTTPS, tuyet doi khong chia se voi ben thu ba.",
+          "giao hang":
+            "SmartFood chi ho tro giao hang noi thanh Da Nang. Phi giao hang tinh tu dong theo khoang cach (khong mien phi). Don dat truoc 18:00 giao trong ngay, sau 18:00 giao sang hom sau.",
+          "doi tra":
+            "Doi tra/hoan tien 100% trong 24h (hang tuoi song 2h) doi voi san pham loi/hu hong. Gui yeu cau tai trang chi tiet don hang hoac lien he Hotline/Zalo.",
+          "hoan tien":
+            "Hoan qua chuyen khoan ngan hang (don COD) trong 24h lam viec. Don PayOS hoan 1-2 ngay lam viec.",
+          "thanh toan":
+            "SmartFood ho tro: Tien mat khi nhan hang (COD) va Thanh toan truc tuyen VietQR qua PayOS.",
+          "huy don":
+            "Khach co the huy don trong 30 phut ke tu khi dat thanh cong. Sau thoi gian nay, lien he Hotline hoac Zalo.",
+          "bao mat":
+            "Du lieu ca nhan ma hoa HTTPS, tuyet doi khong chia se voi ben thu ba.",
         };
         for (const key in policies) {
           if (topic.includes(key)) {
             return JSON.stringify({ topic: key, policy: policies[key] });
           }
         }
-        return JSON.stringify({ topic: "chung", policy: "Vui long xem chi tiet tren website hoac lien he Hotline/Zalo. Chinh sach: Giao hang noi thanh Da Nang, thanh toan COD/PayOS, doi tra loi trong 24h." });
+        return JSON.stringify({
+          topic: "chung",
+          policy:
+            "Vui long xem chi tiet tren website hoac lien he Hotline/Zalo. Chinh sach: Giao hang noi thanh Da Nang, thanh toan COD/PayOS, doi tra loi trong 24h.",
+        });
       }
 
       default:
-        return JSON.stringify({ error: `Tool "${name}" khong duoc nhan dang.` });
+        return JSON.stringify({
+          error: `Tool "${name}" khong duoc nhan dang.`,
+        });
     }
   } catch (err) {
     console.error(`[executeTool:${name}] Loi:`, err.message);
-    return JSON.stringify({ error: `Loi khi thuc thi ${name}: ${err.message}` });
+    return JSON.stringify({
+      error: `Loi khi thuc thi ${name}: ${err.message}`,
+    });
   }
 };
 
-// ─── Helper: format chi tiet don hang ────────────────────────────────────────
+//  Helper: format chi tiet don hang
 const formatOrderDetail = (order) => ({
   id: order._id.toString(),
   orderCode: order.orderCode,
@@ -580,7 +634,9 @@ const formatOrderDetail = (order) => ({
   discountVoucher: order.discountVoucher || 0,
   voucherCode: order.voucherCode || null,
   createdAt: new Date(order.createdAt).toLocaleDateString("vi-VN"),
-  address: order.userInfo ? `${order.userInfo.address}, ${order.userInfo.ward}, ${order.userInfo.district}, ${order.userInfo.province}` : null,
+  address: order.userInfo
+    ? `${order.userInfo.address}, ${order.userInfo.ward}, ${order.userInfo.district}, ${order.userInfo.province}`
+    : null,
   paymentMethod: order.payment?.paymentMethod || null,
   paymentStatus: order.payment?.status || null,
   items: (order.items || []).map((item) => ({
@@ -590,7 +646,7 @@ const formatOrderDetail = (order) => ({
   })),
 });
 
-// ─── 3. System Prompt ─────────────────────────────────────────────────────────
+//  3. System Prompt
 const SYSTEM_PROMPT = `Bạn là trợ lý AI của SmartFood — hệ thống bán lẻ thực phẩm tươi sạch, an toàn, tiết kiệm.
 
 ## Mục tiêu
@@ -643,7 +699,7 @@ const SYSTEM_PROMPT = `Bạn là trợ lý AI của SmartFood — hệ thống b
 - Hiển thị ĐẦY ĐỦ tất cả sản phẩm trong kết quả, không tự rút gọn.
 - Giọng văn tự nhiên, thân thiện, không quảng cáo quá mức.`;
 
-// ─── 4. Main: sendMessage (Agentic Loop) ─────────────────────────────────────
+//  4. Main: sendMessage (Agentic Loop)
 const sendMessage = async ({ message, sessionId, userId = null }) => {
   if (!message?.trim()) {
     throw new ApiError(
@@ -676,9 +732,7 @@ const sendMessage = async ({ message, sessionId, userId = null }) => {
   let aiReply = "";
 
   try {
-    // ══════════════════════════════════════════════════════════
     // BƯỚC 1: Gọi OpenAI lần 1 — AI tự quyết định gọi Tool nào
-    // ══════════════════════════════════════════════════════════
     const firstResponse = await openai.chat.completions.create({
       model: GPT_MODEL,
       messages,
@@ -692,9 +746,7 @@ const sendMessage = async ({ message, sessionId, userId = null }) => {
     const toolCalls = assistantMessage.tool_calls;
 
     if (toolCalls && toolCalls.length > 0) {
-      // ══════════════════════════════════════════════════════════
       // BƯỚC 2: Thực thi song song tất cả Tool Calls (Promise.all)
-      // ══════════════════════════════════════════════════════════
       console.log(`[Agent] AI yêu cầu ${toolCalls.length} tool call(s)`);
 
       // Thêm tin nhắn assistant (chứa tool_calls) vào lịch sử context
@@ -716,9 +768,7 @@ const sendMessage = async ({ message, sessionId, userId = null }) => {
       // Thêm kết quả tool vào context
       messages.push(...toolResults);
 
-      // ══════════════════════════════════════════════════════════
       // BƯỚC 3: Gọi OpenAI lần 2 — Tổng hợp câu trả lời cuối cùng
-      // ══════════════════════════════════════════════════════════
       const secondResponse = await openai.chat.completions.create({
         model: GPT_MODEL,
         messages,
@@ -768,7 +818,7 @@ const sendMessage = async ({ message, sessionId, userId = null }) => {
   return { reply: aiReply, sessionId };
 };
 
-// ─── clearHistory ─────────────────────────────────────────────────────────────
+// ─── clearHistory
 const clearHistory = async ({ sessionId, userId = null }) => {
   if (!sessionId && !userId) {
     throw new ApiError(
@@ -797,7 +847,7 @@ const clearHistory = async ({ sessionId, userId = null }) => {
   return { cleared: true };
 };
 
-// ─── getHistory ───────────────────────────────────────────────────────────────
+//  getHistory
 const getHistory = async ({ sessionId, userId = null }) => {
   if (!sessionId && !userId) {
     throw new ApiError(
@@ -812,12 +862,12 @@ const getHistory = async ({ sessionId, userId = null }) => {
   return { messages: session.messages || [] };
 };
 
-// ─── invalidateProductCache (no-op — tương thích Controller cũ) ──────────────
+//  invalidateProductCache (no-op — tương thích Controller cũ)
 const invalidateProductCache = () => {
   // No-op trong kiến trúc Function Calling — không còn dùng snapshot cache
 };
 
-// ─── 5. sendMessageStream — SSE Streaming Response ────────────────────────────
+//  5. sendMessageStream — SSE Streaming Response
 /**
  * Giống sendMessage nhưng trả về câu trả lời theo cơ chế SSE (stream: true).
  * Người dùng thấy chữ xuất hiện ngay lập tức thay vì chờ toàn bộ câu trả lời.
@@ -855,7 +905,10 @@ const sendMessageStream = async ({
   try {
     // Lấy lịch sử hội thoại và orderContext
     await chatbotMessageModel.upsertSession({ sessionId, userId });
-    const session = await chatbotMessageModel.findSession({ sessionId, userId });
+    const session = await chatbotMessageModel.findSession({
+      sessionId,
+      userId,
+    });
     const sessionOrderCtx = session?.orderContext || null;
     const history = (session?.messages || [])
       .slice(-10)

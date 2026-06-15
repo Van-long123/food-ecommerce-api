@@ -2,9 +2,9 @@ import OpenAI from "openai";
 import { env } from "~/config/environment";
 import { reviewModel } from "~/models/reviewModel";
 import { REVIEW_CONFIG } from "~/constants/reviewConfig";
+import { GPT_MODEL } from "~/constants/aiConfig";
 
 const openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
-const GPT_MODEL = "gpt-4o-mini";
 
 //  Layer 1: Regex & Blacklist
 const BAD_WORDS = [

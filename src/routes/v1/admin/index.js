@@ -13,6 +13,7 @@ import { adminVoucherRoute } from './voucherRoute'
 import { adminOrderRoute } from './orderRoute'
 import { adminPaymentRoute } from './paymentRoute'
 import { adminDashboardRoute } from './dashboardRoute'
+import { adminAiContentRoute } from './aiContentRoute'
 import { userController } from '~/controllers/userController'
 
 
@@ -35,5 +36,6 @@ router.use('/vouchers', adminVoucherRoute)
 router.use('/orders', adminOrderRoute)
 router.use('/payments', adminPaymentRoute)
 router.use('/dashboard', adminDashboardRoute)
+router.use('/ai-content', adminAiContentRoute)
 
 export const adminRouter = router

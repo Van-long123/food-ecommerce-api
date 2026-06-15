@@ -1,3 +1,4 @@
+import axios from 'axios'
 import { StatusCodes } from 'http-status-codes'
 import ApiError from '~/utils/ApiError'
 import { env } from '~/config/environment'
@@ -18,44 +19,46 @@ const BASE_URL = env.RECOMMENDATION_SERVICE_URL || 'http://localhost:8000'
  *   ]
  * } */
 const getRecommendations = async (productId, { limit = 8, categoryBoost = true } = {}) => {
-  const url = new URL('/api/product-recommendation', BASE_URL)
-  url.searchParams.set('product_id', productId)
-  url.searchParams.set('limit', String(limit))
-  url.searchParams.set('category_boost', String(categoryBoost))
-
-  let response
   try {
-    response = await fetch(url.toString(), {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      signal: AbortSignal.timeout(8000) // 8s timeout
+    const response = await axios.get('/api/product-recommendation', {
+      baseURL: BASE_URL,
+      params: {
+        product_id: productId,
+        limit,
+        category_boost: categoryBoost
+      },
+      timeout: 8000 // 8s timeout
     })
-    console.log("🚀 ~ getRecommendations ~ response:", response)
-
+    
+    return response.data
   } catch (err) {
+    if (err.response) {
+      if (err.response.status === 404) {
+        throw new ApiError(StatusCodes.NOT_FOUND, `Không tìm thấy sản phẩm với id: ${productId}`)
+      }
+      throw new ApiError(
+        StatusCodes.INTERNAL_SERVER_ERROR,
+        err.response.data?.detail || 'Lỗi khi lấy gợi ý sản phẩm.'
+      )
+    }
     // Network error hoặc timeout
     throw new ApiError(
       StatusCodes.SERVICE_UNAVAILABLE,
       'Recommendation service không khả dụng. Vui lòng thử lại sau.'
     )
   }
+}
 
-  if (response.status === 404) {
-    throw new ApiError(StatusCodes.NOT_FOUND, `Không tìm thấy sản phẩm với id: ${productId}`)
-  }
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}))
-    throw new ApiError(
-      StatusCodes.INTERNAL_SERVER_ERROR,
-      errorBody.detail || 'Lỗi khi lấy gợi ý sản phẩm.'
-    )
-  }
-
-  const data = await response.json()
-  return data
+const refreshCache = async () => {
+  // Fire and forget (không cần await strict response để không làm chậm luồng)
+  axios.post('/cache-refresh', {}, {
+    baseURL: BASE_URL
+  }).catch(err => {
+    console.error("Lỗi khi gọi webhook refresh-cache:", err.message)
+  })
 }
 
 export const recommendationService = {
-  getRecommendations
+  getRecommendations,
+  refreshCache
 }

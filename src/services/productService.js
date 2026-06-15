@@ -11,6 +11,7 @@ import { parseBool, parseNum } from "~/utils/parsers";
 import { CloudinaryProvider } from "~/providers/CloudinaryProvider";
 import { reviewModerationService } from "~/services/reviewModerationService";
 import { embeddingService } from "~/services/embeddingService";
+import { recommendationService } from "~/services/recommendationService";
 
 // Helper: generate unique slug
 const generateUniqueSlug = async (title, providedSlug) => {
@@ -168,6 +169,10 @@ const createNew = async (reqBody, actorId, files = null) => {
     }
 
     const result = await productModel.getDetails(productId);
+    
+    // Trigger webhook làm mới cache recommendation bên Python ngầm
+    recommendationService.refreshCache();
+    
     return result;
   } catch (error) {
     throw error;
@@ -393,6 +398,10 @@ const update = async (id, reqBody, actorId, files = null) => {
     }
 
     const result = await productModel.getDetails(id);
+    
+    // Trigger webhook làm mới cache recommendation bên Python ngầm
+    recommendationService.refreshCache();
+
     return result;
   } catch (error) {
     throw error;
@@ -478,6 +487,10 @@ const softDelete = async (id, actorId) => {
     // Xoá mềm tất cả category mappings
     // await categoryProductModel.deleteAllByProductId(id);
     const result = await productModel.softDelete(id, actorId, actor.email);
+
+    // Trigger webhook làm mới cache recommendation bên Python ngầm
+    recommendationService.refreshCache();
+
     return result;
   } catch (error) {
     throw error;
@@ -494,6 +507,10 @@ const bulkUpdateStatusAdmin = async ({ product_ids = [], status }) => {
     }
 
     const result = await productModel.updateManyStatus(product_ids, status);
+    
+    // Trigger webhook làm mới cache recommendation bên Python ngầm
+    recommendationService.refreshCache();
+
     return { updatedCount: result?.modifiedCount || 0 };
   } catch (error) {
     throw error;
@@ -522,6 +539,9 @@ const bulkDeleteAdmin = async ({ product_ids = [] }, actorId) => {
       actorId,
       actor.email,
     );
+
+    // Trigger webhook làm mới cache recommendation bên Python ngầm
+    recommendationService.refreshCache();
 
     return { deletedCount: result?.modifiedCount || 0 };
   } catch (error) {
