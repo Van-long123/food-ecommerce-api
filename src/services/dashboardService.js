@@ -216,7 +216,7 @@ const getDashboardOverview = async () => {
   // Map về mảng 12 phần tử (triệu VND)
   const revenueChart = Array.from({ length: 12 }, (_, i) => {
     const found = revenueByMonth.find((r) => r._id.month === i + 1);
-    return found ? Math.round(found.revenue / 1_000_000) : 0;
+    return found ? found.revenue : 0;
   });
 
   // 3. BIỂU ĐỒ ĐƠN HÀNG 7 NGÀY
