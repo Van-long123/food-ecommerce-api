@@ -33,10 +33,11 @@
 
 ## ✨ Tính năng cốt lõi & AI
 
-### 🤖 AI Chatbot (RAG & Function Calling)
+### 🤖 AI Chatbot & Dịch vụ Thông minh (OpenAI + RAG)
 - **OpenAI Integration:** Sử dụng model `gpt-4o-mini`.
 - **Function Calling:** Bot có khả năng tự động trích xuất thông tin (Mã đơn hàng, voucher, v.v.) và gọi các hàm tương ứng để truy vấn cơ sở dữ liệu theo thời gian thực.
 - **RAG Pipeline (Retrieval-Augmented Generation):** Kết hợp MongoDB Atlas Vector Search để tìm kiếm ngữ nghĩa và Redis để cache kết quả, giúp bot trả lời chính xác các câu hỏi về sản phẩm của cửa hàng.
+- **AI Content Generator & Moderation:** Sử dụng AI để tự động tạo nội dung (bài viết, mô tả sản phẩm) và tự động kiểm duyệt đánh giá (Review Moderation) của người dùng.
 - **SSE (Server-Sent Events):** Stream phản hồi của Chatbot về phía Client theo thời gian thực (real-time streaming) để tối ưu trải nghiệm tương tác.
 
 ### 🛍️ Dịch vụ Thương mại điện tử
@@ -52,9 +53,9 @@
 - Phân quyền theo Role-Based Access Control (RBAC): Admin, User.
 
 ### ⚡ Real-time & Khác
-- **Socket.IO:** Gửi thông báo thời gian thực đến Admin khi có đơn hàng mới hoặc sự kiện quan trọng.
+- **Socket.IO (Real-Time Order Tracking):** Cập nhật trạng thái đơn hàng theo thời gian thực cho Khách hàng khi Admin hoặc hệ thống thay đổi trạng thái, không cần tải lại trang.
 - **Cloudinary:** Dịch vụ lưu trữ và tối ưu hóa hình ảnh sản phẩm.
-- **Nodemailer:** Xử lý gửi email xác thực, quên mật khẩu và biên lai.
+- **Nodemailer:** Xử lý gửi email xác thực, quên mật khẩu và biên lai giao hàng.
 
 ---
 
