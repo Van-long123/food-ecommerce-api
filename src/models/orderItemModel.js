@@ -8,6 +8,7 @@ const ORDER_ITEM_COLLECTION_SCHEMA = Joi.object({
   orderId: Joi.string().required().trim().strict(),
   productId: Joi.string().required().trim().strict(),
   title: Joi.string().required(),
+  slug: Joi.string().allow('').optional(),
   thumbnail: Joi.string().allow('').optional(),
   quantity: Joi.number().integer().min(1).required(),
   price: Joi.number().required(),

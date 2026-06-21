@@ -1,3 +1,4 @@
+import http from 'http'
 import express from 'express'
 import cookieParser from 'cookie-parser'
 import exitHook from 'async-exit-hook'
@@ -9,6 +10,7 @@ import { env } from '~/config/environment'
 import { APIs_V1 } from '~/routes/v1/index'
 import passport from '~/config/passport'
 import { startOrderAutoCompleteJob } from '~/services/orderAutoCompleteJob'
+import { socketManager } from '~/sockets/socketManager'
 
 const START_SERVER = () => {
   const app = express()
@@ -34,15 +36,20 @@ const START_SERVER = () => {
   //Middleware xử lý lỗi tập chung
   app.use(errorHandlingMiddleware)
 
+  // Bọc Express app trong httpServer để Socket.IO chia sẻ cùng port
+  const httpServer = http.createServer(app)
+
+  // Khởi tạo Socket.IO — phải sau khi app đã có đủ middleware
+  socketManager.initSocket(httpServer)
+
   //Môi trường production
   if (env.BUILD_MODE === 'production') {
-    // Môi trường thằng render nó tự động tạo PORT
-    app.listen(process.env.PORT, () => {
+    httpServer.listen(process.env.PORT, () => {
       console.log(`Production: I am ${env.AUTHOR} running at PORT: ${ process.env.PORT }/`)
     })
   } else {
     //Môi trường Local Dev
-    app.listen(env.APP_PORT, env.APP_NAME, () => {
+    httpServer.listen(env.APP_PORT, env.APP_NAME, () => {
       console.log(`Local Dev: I am ${env.AUTHOR} running at ${ env.APP_NAME }:${ env.APP_PORT }/`)
     })
   }

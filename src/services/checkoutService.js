@@ -166,13 +166,14 @@ const createCodCheckout = async (userId, payload) => {
         orderId: null,
         productId: item.productId,
         title: product.title,
-        thumbnail: product.thumbnail || "",
+        slug: product.slug || '',
+        thumbnail: product.thumbnail || '',
         quantity: item.quantity,
         price,
         totalPrice,
         categoryId: product.primary_category_id
           ? String(product.primary_category_id)
-          : "",
+          : '',
       };
     })
     .filter(Boolean);
@@ -257,6 +258,7 @@ const createCodCheckout = async (userId, payload) => {
         orderId: createdOrderId,
         productId: item.productId,
         title: item.title,
+        slug: item.slug || '',
         thumbnail: item.thumbnail,
         quantity: item.quantity,
         price: item.price,
@@ -439,13 +441,14 @@ const createPayOSCheckout = async (userId, payload) => {
         orderId: null,
         productId: item.productId,
         title: product.title,
-        thumbnail: product.thumbnail || "",
+        slug: product.slug || '',
+        thumbnail: product.thumbnail || '',
         quantity: item.quantity,
         price,
         totalPrice,
         categoryId: product.primary_category_id
           ? String(product.primary_category_id)
-          : "",
+          : '',
       };
     })
     .filter(Boolean);
@@ -528,6 +531,7 @@ const createPayOSCheckout = async (userId, payload) => {
         orderId: createdOrderId,
         productId: item.productId,
         title: item.title,
+        slug: item.slug || '',
         thumbnail: item.thumbnail,
         quantity: item.quantity,
         price: item.price,

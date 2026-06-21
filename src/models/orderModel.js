@@ -110,10 +110,38 @@ const findByIdAndUserId = async (orderId, userId) => {
           $match: { _id: new ObjectId(orderId), userId: new ObjectId(userId) },
         },
         {
+          // Join order_items và enrich mỗi item với slug từ products collection
           $lookup: {
             from: "order_items",
-            localField: "_id",
-            foreignField: "orderId",
+            let: { orderId: "$_id" },
+            pipeline: [
+              { $match: { $expr: { $eq: ["$orderId", "$$orderId"] } } },
+              {
+                // Nested lookup: lấy slug từ products theo productId của mỗi item
+                $lookup: {
+                  from: "products",
+                  let: { pid: "$productId" },
+                  pipeline: [
+                    { $match: { $expr: { $eq: ["$_id", "$$pid"] } } },
+                    { $project: { slug: 1 } },
+                  ],
+                  as: "productInfo",
+                },
+              },
+              {
+                // Merge slug vào item, ưu tiên slug đã lưu sẵn, fallback lấy từ product
+                $addFields: {
+                  slug: {
+                    $cond: {
+                      if: { $and: [{ $ifNull: ["$slug", false] }, { $gt: [{ $strLenCP: { $ifNull: ["$slug", ""] } }, 0] }] },
+                      then: "$slug",
+                      else: { $arrayElemAt: ["$productInfo.slug", 0] },
+                    },
+                  },
+                },
+              },
+              { $project: { productInfo: 0 } },
+            ],
             as: "items",
           },
         },
@@ -122,7 +150,7 @@ const findByIdAndUserId = async (orderId, userId) => {
             from: "payments",
             localField: "_id",
             foreignField: "orderId",
-            as: "payment", // Use payment instead of payments since we usually expect one payment per order, though it returns array. We can get the first one in service
+            as: "payment",
           },
         },
       ])

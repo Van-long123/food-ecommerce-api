@@ -7,6 +7,7 @@ import { voucherUsageModel } from "~/models/voucherUsageModel";
 import { GET_CLIENT } from "~/config/mongodb";
 import { env } from "~/config/environment";
 import { cancelPayOSPaymentLink } from "~/services/payosService";
+import { socketManager, SOCKET_EVENTS } from "~/sockets/socketManager";
 /**
  * Số ngày tối đa đơn hàng được phép ở trạng thái "shipping"
  * trước khi hệ thống tự động chuyển sang "delivered". */
@@ -55,6 +56,14 @@ const processOneOrder = async (order) => {
 
     await session.commitTransaction();
     console.log(`[AutoComplete] Đơn hàng ${orderId} đã tự động hoàn thành.`);
+
+    // Emit realtime đến client (nếu đang online) để cập nhật UI không cần reload
+    if (order.userId) {
+      socketManager.emitToUser(String(order.userId), SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
+        orderId: String(orderId),
+        status: "delivered",
+      });
+    }
   } catch (error) {
     await session.abortTransaction();
     console.error(
@@ -173,6 +182,14 @@ const processOverduePayOSOrder = async (order) => {
     console.log(
       `[PayOSExpire] Đơn hàng ${orderId} đã tự động hủy do quá hạn thanh toán.`,
     );
+
+    // Emit realtime đến client (nếu đang online)
+    if (order.userId) {
+      socketManager.emitToUser(String(order.userId), SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
+        orderId: String(orderId),
+        status: "cancelled",
+      });
+    }
   } catch (error) {
     await session.abortTransaction();
     console.error(

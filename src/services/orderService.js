@@ -19,6 +19,7 @@ import {
   isPayOSLinkActive,
 } from "~/services/payosService";
 import { env } from "~/config/environment";
+import { socketManager, SOCKET_EVENTS } from "~/sockets/socketManager";
 
 // Luồng trạng thái hợp lệ (dùng chung cho Admin update)
 const ALLOWED_STATUS_TRANSITIONS = {
@@ -416,6 +417,18 @@ const cancelOrder = async (orderId, userId, payload = {}) => {
 
     await session.commitTransaction();
 
+    // Emit realtime event đến client ngay sau khi hủy đơn thành công
+    socketManager.emitToUser(String(userId), SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
+      orderId: String(orderId),
+      status: "cancelled",
+    });
+
+    // Thông báo cho Admin realtime
+    socketManager.emitToAdmins(SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
+      orderId: String(orderId),
+      status: "cancelled",
+    });
+
     if (isPaidViaPayOS) {
       return {
         success: true,
@@ -476,6 +489,19 @@ const confirmReceived = async (orderId, userId) => {
     await productModel.increaseSoldCountMany(items, { session });
 
     await session.commitTransaction();
+
+    // Emit realtime event đến client sau khi xác nhận nhận hàng thành công
+    socketManager.emitToUser(String(userId), SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
+      orderId: String(orderId),
+      status: "delivered",
+    });
+
+    // Thông báo cho Admin realtime
+    socketManager.emitToAdmins(SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
+      orderId: String(orderId),
+      status: "delivered",
+    });
+
     return { success: true, message: "Xác nhận nhận hàng thành công" };
   } catch (error) {
     await session.abortTransaction();
@@ -650,6 +676,15 @@ const updateAdminOrderStatus = async (orderId, newStatus, adminId) => {
       session,
     );
     await session.commitTransaction();
+
+    // Emit realtime event đến client sở hữu đơn hàng này
+    if (updatedOrder?.userId) {
+      socketManager.emitToUser(String(updatedOrder.userId), SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
+        orderId: String(orderId),
+        status: newStatus,
+      });
+    }
+
     return updatedOrder;
   } catch (error) {
     await session.abortTransaction();
@@ -687,6 +722,17 @@ const bulkUpdateAdminOrderStatus = async (
     }
 
     await session.commitTransaction();
+
+    // Emit realtime event đến từng user sở hữu đơn hàng
+    updatedOrders.forEach((updatedOrder) => {
+      if (updatedOrder?.userId) {
+        socketManager.emitToUser(String(updatedOrder.userId), SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
+          orderId: String(updatedOrder._id),
+          status: newStatus,
+        });
+      }
+    });
+
     return {
       success: true,
       message: `Đã cập nhật trạng thái cho ${updatedOrders.length} đơn hàng`,
@@ -791,6 +837,15 @@ const confirmCodPayment = async (paymentId, adminId) => {
     await productModel.increaseSoldCountMany(items, { session });
 
     await session.commitTransaction();
+
+    // Emit realtime event đến client sau khi admin xác nhận COD/PayOS payment
+    if (order?.userId) {
+      socketManager.emitToUser(String(order.userId), SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
+        orderId: String(orderId),
+        status: "delivered",
+      });
+    }
+
     return {
       success: true,
       message: `Đã xác nhận thu tiền ${payment.paymentMethod} thành công`,
