@@ -24,6 +24,7 @@ import {
   createPayOSPaymentLink,
   getPayOSExpiredAt,
 } from "~/services/payosService";
+import { socketManager } from "~/sockets/socketManager";
 
 /**
  * Tính phí vận chuyển cho địa chỉ được chọn.
@@ -339,6 +340,13 @@ const createCodCheckout = async (userId, payload) => {
       );
     }
 
+    // 7. Thông báo realtime cho Admin: Có đơn hàng COD mới
+    socketManager.emitToAdmins(socketManager.SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
+      orderId: createdOrderId,
+      orderCode,
+      status: 'pending',
+    })
+
     return {
       orderId: createdOrderId,
       paymentId,
@@ -602,6 +610,13 @@ const createPayOSCheckout = async (userId, payload) => {
     const productIdsToRemove = normalizedItems.map((item) => item.productId);
     await cartService.removeItems(userId, productIdsToRemove);
 
+    // Thông báo realtime cho Admin: Có đơn hàng PayOS mới (chờ thanh toán)
+    socketManager.emitToAdmins(socketManager.SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
+      orderId: createdOrderId,
+      orderCode,
+      status: 'pending',
+    })
+
     return { checkoutUrl: paymentLink.checkoutUrl, orderId: createdOrderId };
   } finally {
     await session.endSession();
@@ -690,6 +705,13 @@ const handlePayOSWebhook = async (body) => {
     } catch (emailErr) {
       console.error("Lỗi chuẩn bị email PayOS:", emailErr);
     }
+
+    // Thông báo realtime cho Admin: Đơn PayOS đã xác nhận thanh toán
+    socketManager.emitToAdmins(socketManager.SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
+      orderId,
+      orderCode,
+      status: 'confirmed',
+    })
 
     return { received: true, processed: true, orderId };
   } finally {

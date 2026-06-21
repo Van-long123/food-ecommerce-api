@@ -420,12 +420,14 @@ const cancelOrder = async (orderId, userId, payload = {}) => {
     // Emit realtime event đến client ngay sau khi hủy đơn thành công
     socketManager.emitToUser(String(userId), SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
       orderId: String(orderId),
+      orderCode: order.orderCode,
       status: "cancelled",
     });
 
     // Thông báo cho Admin realtime
     socketManager.emitToAdmins(SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
       orderId: String(orderId),
+      orderCode: order.orderCode,
       status: "cancelled",
     });
 
@@ -493,12 +495,14 @@ const confirmReceived = async (orderId, userId) => {
     // Emit realtime event đến client sau khi xác nhận nhận hàng thành công
     socketManager.emitToUser(String(userId), SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
       orderId: String(orderId),
+      orderCode: order.orderCode,
       status: "delivered",
     });
 
     // Thông báo cho Admin realtime
     socketManager.emitToAdmins(SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
       orderId: String(orderId),
+      orderCode: order.orderCode,
       status: "delivered",
     });
 
@@ -681,6 +685,7 @@ const updateAdminOrderStatus = async (orderId, newStatus, adminId) => {
     if (updatedOrder?.userId) {
       socketManager.emitToUser(String(updatedOrder.userId), SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
         orderId: String(orderId),
+        orderCode: updatedOrder.orderCode,
         status: newStatus,
       });
     }
@@ -728,6 +733,7 @@ const bulkUpdateAdminOrderStatus = async (
       if (updatedOrder?.userId) {
         socketManager.emitToUser(String(updatedOrder.userId), SOCKET_EVENTS.ORDER_STATUS_UPDATED, {
           orderId: String(updatedOrder._id),
+          orderCode: updatedOrder.orderCode,
           status: newStatus,
         });
       }
