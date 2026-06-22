@@ -13,6 +13,7 @@ import { corsOptions } from '~/config/cors'
 // Các event name — nguồn sự thật duy nhất, FE sẽ dùng cùng tên
 export const SOCKET_EVENTS = {
   ORDER_STATUS_UPDATED: 'ORDER_STATUS_UPDATED',
+  REFUND_STATUS_UPDATED: 'REFUND_STATUS_UPDATED',
 }
 
 /** io instance — private, chỉ truy cập qua getIO() */

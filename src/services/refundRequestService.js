@@ -12,6 +12,7 @@ import {
   getRefundRejectedTemplate,
   getRefundCompletedTemplate,
 } from "~/templates/emailTemplates";
+import { socketManager } from "~/sockets/socketManager";
 
 const REFUND_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -180,11 +181,7 @@ const uploadRefundEvidenceFiles = async (files = []) => {
 
 const createRefundRequest = async (userId, payload, files = []) => {
   try {
-    const {
-      orderId,
-      reason,
-      refundMethod = "bank_transfer",
-    } = payload || {};
+    const { orderId, reason, refundMethod = "bank_transfer" } = payload || {};
 
     const parsedItems = parseJsonField(payload?.items, []);
     const parsedBankInfo = parseJsonField(payload?.bankInfo, null);
@@ -235,11 +232,18 @@ const createRefundRequest = async (userId, payload, files = []) => {
       userId,
       items: refundItems,
       reason: String(reason || "").trim(),
-      images: [...(Array.isArray(parsedImages) ? parsedImages : []), ...evidence.images],
-      videos: [...(Array.isArray(parsedVideos) ? parsedVideos : []), ...evidence.videos],
+      images: [
+        ...(Array.isArray(parsedImages) ? parsedImages : []),
+        ...evidence.images,
+      ],
+      videos: [
+        ...(Array.isArray(parsedVideos) ? parsedVideos : []),
+        ...evidence.videos,
+      ],
       amount,
       refundMethod: normalizedRefundMethod,
-      bankInfo: normalizedRefundMethod === "bank_transfer" ? parsedBankInfo : null,
+      bankInfo:
+        normalizedRefundMethod === "bank_transfer" ? parsedBankInfo : null,
     };
 
     if (!refundPayload.reason) {
@@ -250,8 +254,20 @@ const createRefundRequest = async (userId, payload, files = []) => {
     }
 
     const result = await refundRequestModel.createNew(refundPayload);
+    const refundId = result.insertedId.toString();
+
+    // Thông báo realtime cho Admin: Có yêu cầu hoàn tiền mới
+    socketManager.emitToAdmins(
+      socketManager.SOCKET_EVENTS.REFUND_STATUS_UPDATED,
+      {
+        refundId,
+        orderId,
+        status: "pending",
+      },
+    );
+
     return {
-      _id: result.insertedId.toString(),
+      _id: refundId,
       status: refundRequestModel.REFUND_REQUEST_STATUSES.PENDING,
     };
   } catch (error) {
@@ -370,6 +386,28 @@ const approveRefundRequest = async (requestId) => {
       ).catch((err) => console.error("Lỗi gửi email duyệt hoàn tiền:", err));
     }
 
+    // Thông báo realtime cho User và Admin
+    const refundUserId = refundRequest.userId?.toString();
+    if (refundUserId) {
+      socketManager.emitToUser(
+        refundUserId,
+        socketManager.SOCKET_EVENTS.REFUND_STATUS_UPDATED,
+        {
+          refundId: String(requestId),
+          orderId: refundRequest.orderId?.toString() || "",
+          status: newStatus,
+        },
+      );
+    }
+    socketManager.emitToAdmins(
+      socketManager.SOCKET_EVENTS.REFUND_STATUS_UPDATED,
+      {
+        refundId: String(requestId),
+        orderId: refundRequest.orderId?.toString() || "",
+        status: newStatus,
+      },
+    );
+
     return updated.value;
   } catch (error) {
     throw error;
@@ -422,6 +460,28 @@ const rejectRefundRequest = async (requestId, reason) => {
       ).catch((err) => console.error("Lỗi gửi email từ chối hoàn tiền:", err));
     }
 
+    // Thông báo realtime cho User và Admin
+    const refundUserId = refundRequest.userId?.toString();
+    if (refundUserId) {
+      socketManager.emitToUser(
+        refundUserId,
+        socketManager.SOCKET_EVENTS.REFUND_STATUS_UPDATED,
+        {
+          refundId: String(requestId),
+          orderId: refundRequest.orderId?.toString() || "",
+          status: refundRequestModel.REFUND_REQUEST_STATUSES.REJECTED,
+        },
+      );
+    }
+    socketManager.emitToAdmins(
+      socketManager.SOCKET_EVENTS.REFUND_STATUS_UPDATED,
+      {
+        refundId: String(requestId),
+        orderId: refundRequest.orderId?.toString() || "",
+        status: refundRequestModel.REFUND_REQUEST_STATUSES.REJECTED,
+      },
+    );
+
     return updated.value;
   } catch (error) {
     throw error;
@@ -464,11 +524,12 @@ const completeRefundRequest = async (requestId, payload) => {
       );
     }
 
-    await orderModel.updateStatusById(
+    const updatedOrderResult = await orderModel.updateStatusById(
       refundRequest.orderId.toString(),
       "returned",
       { session },
     );
+    const updatedOrder = updatedOrderResult?.value || updatedOrderResult;
 
     const updateData = {
       status: refundRequestModel.REFUND_REQUEST_STATUSES.COMPLETED,
@@ -477,13 +538,13 @@ const completeRefundRequest = async (requestId, payload) => {
       updateData.transactionImage = transactionImage;
     }
 
-    const updatedRefund = await refundRequestModel.updateById(
+    const updatedValue = await refundRequestModel.updateById(
       requestId,
       updateData,
       { session },
     );
 
-    const updatedValue = updatedRefund?.value;
+    // const updatedValue = updatedRefund?.value ?? updatedRefund;
 
     await session.commitTransaction();
 
@@ -504,6 +565,48 @@ const completeRefundRequest = async (requestId, payload) => {
           console.error("Lỗi gửi email hoàn tiền thành công:", err),
         );
       }
+
+      // Thông báo realtime cho User và Admin: Hoàn tiền hoàn tất
+      const refundUserId = updatedValue.userId?.toString();
+      if (refundUserId) {
+        // Emit hoàn tiền
+        socketManager.emitToUser(
+          refundUserId,
+          socketManager.SOCKET_EVENTS.REFUND_STATUS_UPDATED,
+          {
+            refundId: String(requestId),
+            orderId: updatedValue.orderId?.toString() || "",
+            status: refundRequestModel.REFUND_REQUEST_STATUSES.COMPLETED,
+          },
+        );
+
+        // Emit cập nhật trạng thái đơn hàng (sang "returned")
+        socketManager.emitToUser(
+          refundUserId,
+          socketManager.SOCKET_EVENTS.ORDER_STATUS_UPDATED,
+          {
+            orderId: updatedValue.orderId?.toString() || "",
+            orderCode: updatedOrder?.orderCode,
+            status: "returned",
+          },
+        );
+      }
+      socketManager.emitToAdmins(
+        socketManager.SOCKET_EVENTS.REFUND_STATUS_UPDATED,
+        {
+          refundId: String(requestId),
+          orderId: updatedValue.orderId?.toString() || "",
+          status: refundRequestModel.REFUND_REQUEST_STATUSES.COMPLETED,
+        },
+      );
+      socketManager.emitToAdmins(
+        socketManager.SOCKET_EVENTS.ORDER_STATUS_UPDATED,
+        {
+          orderId: updatedValue.orderId?.toString() || "",
+          orderCode: updatedOrder?.orderCode,
+          status: "returned",
+        },
+      );
     }
 
     return updatedValue;
