@@ -18,6 +18,7 @@ import { chatbotMessageModel } from "~/models/chatbotMessageModel";
 import { productModel } from "~/models/productModel";
 import { orderModel } from "~/models/orderModel";
 import { voucherModel } from "~/models/voucherModel";
+import { voucherUsageModel } from "~/models/voucherUsageModel";
 import ApiError from "~/utils/ApiError";
 import { StatusCodes } from "http-status-codes";
 
@@ -483,6 +484,12 @@ const executeTool = async (toolCall, userId) => {
           statusText = "Chua den ngay ap dung";
         else if (voucher.quantity <= voucher.usedCount)
           statusText = "Da het luot su dung";
+        else if (userId) {
+          const usageCount = await voucherUsageModel.countUsageByUser(voucher._id, userId);
+          if (usageCount >= voucher.usageLimitPerUser) {
+            statusText = "Ban da het luot su dung ma nay";
+          }
+        }
 
         return JSON.stringify({
           code: voucher.code,
@@ -502,11 +509,22 @@ const executeTool = async (toolCall, userId) => {
       // ── get_available_vouchers (tu dong kham pha) ──
       case "get_available_vouchers": {
         const { order_total } = args;
-        const vouchers = await voucherModel.findActiveVouchers();
+        let vouchers = await voucherModel.findActiveVouchers();
+
+        // Neu khach da dang nhap, loai bo cac voucher ma khach da dung het luot
+        if (userId && vouchers && vouchers.length > 0) {
+          const voucherIds = vouchers.map((v) => v._id);
+          const usageMap = await voucherUsageModel.countUsagesByUser(userId, voucherIds);
+
+          vouchers = vouchers.filter((v) => {
+            const usageCount = usageMap[v._id.toString()] || 0;
+            return usageCount < (v.usageLimitPerUser || 1);
+          });
+        }
 
         if (!vouchers || vouchers.length === 0) {
           return JSON.stringify({
-            message: "Hien tai chua co voucher nao dang co hieu luc.",
+            message: "Hien tai chua co voucher nao dang co hieu luc phu hop voi ban.",
           });
         }
 

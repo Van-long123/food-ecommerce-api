@@ -28,6 +28,39 @@ const countUsageByUser = async (voucherId, userId) => {
 }
 
 /**
+ * Lấy số lần sử dụng của một user cho danh sách các voucher (Bulk query chống N+1).
+ * Trả về object mapping: { [voucherId]: count }
+ */
+const countUsagesByUser = async (userId, voucherIds) => {
+  try {
+    const usages = await GET_DB()
+      .collection(VOUCHER_USAGE_COLLECTION_NAME)
+      .aggregate([
+        {
+          $match: {
+            userId: new ObjectId(userId),
+            voucherId: { $in: voucherIds.map((id) => new ObjectId(id)) },
+          },
+        },
+        {
+          $group: {
+            _id: "$voucherId",
+            count: { $sum: 1 },
+          },
+        },
+      ])
+      .toArray();
+
+    return usages.reduce((acc, curr) => {
+      acc[curr._id.toString()] = curr.count;
+      return acc;
+    }, {});
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
  * Ghi lại usage khi user dùng voucher */
 const recordUsage = async ({ voucherId, userId, orderId = null }, options = {}) => {
   try {
@@ -83,6 +116,7 @@ const deleteUsageByOrderId = async (orderId, options = {}) => {
 export const voucherUsageModel = {
   VOUCHER_USAGE_COLLECTION_NAME,
   countUsageByUser,
+  countUsagesByUser,
   recordUsage,
   deleteUsageByOrderId
 }

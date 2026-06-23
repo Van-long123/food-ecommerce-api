@@ -255,7 +255,7 @@ const findActiveVouchers = async () => {
             code: 1, name: 1, description: 1,
             type: 1, discountValue: 1, maxDiscountAmount: 1,
             minOrderValue: 1, applyFor: 1, applyForIds: 1,
-            endDate: 1, quantity: 1, usedCount: 1, isFeatured: 1,
+            endDate: 1, quantity: 1, usedCount: 1, isFeatured: 1, usageLimitPerUser: 1,
           },
           sort: { isFeatured: -1, discountValue: -1 },
         },
