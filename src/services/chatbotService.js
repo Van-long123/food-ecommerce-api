@@ -33,12 +33,15 @@ import { createClient } from "redis";
 let redisClient = null;
 
 const getRedis = async () => {
+  // 1. Nếu client đã tồn tại và đang mở kết nối, trả về client đó luôn
   if (redisClient && redisClient.isOpen) return redisClient;
   try {
+    // 2. Nếu chưa có kết nối, khởi tạo một client mới
     redisClient = createClient({
       url: env.REDIS_URL || "redis://localhost:6379",
-      RESP: 2,
+      RESP: 2, // Sử dụng giao thức RESP2 để tương thích tốt nhất
     });
+    // 3. Đăng ký callback lắng nghe lỗi
     redisClient.on("error", (e) =>
       console.warn("[Redis] Lỗi kết nối:", e.message),
     );
@@ -61,10 +64,10 @@ const getEmbeddingCached = async (text) => {
   try {
     const redis = await getRedis();
     if (redis) {
-      const cached = await redis.get(cacheKey);
+      const cached = await redis.get(cacheKey); // Đọc giá trị từ Redis
       if (cached) {
         console.log(`[Cache HIT] embed: "${text.slice(0, 40)}..."`);
-        return JSON.parse(cached);
+        return JSON.parse(cached); // chuyển chuỗi JSON thành mảng Vector
       }
     }
   } catch (e) {
@@ -76,12 +79,13 @@ const getEmbeddingCached = async (text) => {
     model: EMBED_MODEL,
     input: text,
   });
-  const vector = res.data[0].embedding;
+  const vector = res.data[0].embedding; // Lấy mảng vector [0.1, 0.2, ...]
 
   try {
     const redis = await getRedis();
     if (redis) {
-      await redis.setEx(cacheKey, 86400, JSON.stringify(vector)); // TTL 24h
+      // Lưu vào Redis với thời gian sống (TTL) là 24 giờ (86400 giây)
+      await redis.setEx(cacheKey, 86400, JSON.stringify(vector));
       console.log(`[Cache SET] embed: "${text.slice(0, 40)}..."`);
     }
   } catch (e) {
@@ -90,8 +94,6 @@ const getEmbeddingCached = async (text) => {
 
   return vector;
 };
-
-//  Helpers
 
 /** Loại bỏ thẻ HTML từ TinyMCE trước khi nhét vào context */
 const stripHtml = (html) =>
@@ -291,6 +293,7 @@ const executeTool = async (toolCall, userId) => {
   const name = toolCall.function.name;
   let args = {};
   try {
+    // arguments luôn là một CHUỖI VĂN BẢN (String) chứa định dạng JSON
     args = JSON.parse(toolCall.function.arguments || "{}");
   } catch {
     console.error(
@@ -298,8 +301,6 @@ const executeTool = async (toolCall, userId) => {
       toolCall.function.arguments,
     );
   }
-
-  console.log(`[Agent] Thực thi tool: ${name}`, args);
 
   try {
     switch (name) {
@@ -333,7 +334,7 @@ const executeTool = async (toolCall, userId) => {
         let products = await productModel.findByVectorSearch(embedding, limit);
         if (!products || products.length === 0) {
           const keywords = query
-            .replace(/[?!.,;:"']/g, " ")
+            .replace(/[?!.,;:"']/g, " ") // Loại bỏ các ký tự đặc biệt và dấu câu.
             .split(" ")
             .map((w) => w.trim().toLowerCase())
             .filter((w) => w.length > 1);
@@ -485,7 +486,10 @@ const executeTool = async (toolCall, userId) => {
         else if (voucher.quantity <= voucher.usedCount)
           statusText = "Da het luot su dung";
         else if (userId) {
-          const usageCount = await voucherUsageModel.countUsageByUser(voucher._id, userId);
+          const usageCount = await voucherUsageModel.countUsageByUser(
+            voucher._id,
+            userId,
+          );
           if (usageCount >= voucher.usageLimitPerUser) {
             statusText = "Ban da het luot su dung ma nay";
           }
@@ -514,7 +518,10 @@ const executeTool = async (toolCall, userId) => {
         // Neu khach da dang nhap, loai bo cac voucher ma khach da dung het luot
         if (userId && vouchers && vouchers.length > 0) {
           const voucherIds = vouchers.map((v) => v._id);
-          const usageMap = await voucherUsageModel.countUsagesByUser(userId, voucherIds);
+          const usageMap = await voucherUsageModel.countUsagesByUser(
+            userId,
+            voucherIds,
+          );
 
           vouchers = vouchers.filter((v) => {
             const usageCount = usageMap[v._id.toString()] || 0;
@@ -524,7 +531,8 @@ const executeTool = async (toolCall, userId) => {
 
         if (!vouchers || vouchers.length === 0) {
           return JSON.stringify({
-            message: "Hien tai chua co voucher nao dang co hieu luc phu hop voi ban.",
+            message:
+              "Hien tai chua co voucher nao dang co hieu luc phu hop voi ban.",
           });
         }
 
@@ -717,7 +725,7 @@ const SYSTEM_PROMPT = `Bạn là trợ lý AI của SmartFood — hệ thống b
 - Hiển thị ĐẦY ĐỦ tất cả sản phẩm trong kết quả, không tự rút gọn.
 - Giọng văn tự nhiên, thân thiện, không quảng cáo quá mức.`;
 
-//  4. Main: sendMessage (Agentic Loop)
+//  4. Main: sendMessage (Agentic Loop) ko dùng nữa đổi sang dùng sendMessageStream
 const sendMessage = async ({ message, sessionId, userId = null }) => {
   if (!message?.trim()) {
     throw new ApiError(
@@ -911,7 +919,7 @@ const sendMessageStream = async ({
     throw new ApiError(StatusCodes.BAD_REQUEST, "SessionId là bắt buộc!");
 
   // Thiết lập headers SSE
-  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8"); // Báo cho trình duyệt biết đây là kết nối stream dữ liệu liên tục
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no"); // Tắt buffer trên Nginx
@@ -944,7 +952,7 @@ const sendMessageStream = async ({
       messages,
       tools: TOOLS,
       tool_choice: "auto",
-      temperature: 0.7,
+      temperature: 0.7, // Độ sáng tạo của AI: 0.0 -> 2.0
       max_tokens: 1000,
     });
 
@@ -953,7 +961,7 @@ const sendMessageStream = async ({
 
     if (toolCalls && toolCalls.length > 0) {
       // BƯỚC 2: Thực thi song song tất cả tools
-      emit({ type: "tool_start", count: toolCalls.length });
+      emit({ type: "tool_start", count: toolCalls.length }); // Thông báo cho Client biết AI đang chạy Tool
       messages.push(assistantMessage);
 
       const toolResults = await Promise.all(
@@ -978,6 +986,7 @@ const sendMessageStream = async ({
         stream: true, // ← BẬT STREAMING
       });
 
+      // Nhận từng mảnh (chunk) chữ và bắn ngay về cho client
       let aiReply = "";
       for await (const chunk of stream) {
         const delta = chunk.choices[0]?.delta?.content;

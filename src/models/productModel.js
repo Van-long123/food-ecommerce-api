@@ -43,7 +43,11 @@ const PRODUCT_COLLECTION_SCHEMA = Joi.object({
   isBestPrice: Joi.boolean().default(false),
   isOnlineExclusive: Joi.boolean().default(false),
   tags: Joi.array().items(Joi.string()).default([]),
-  embeddingVector: Joi.array().items(Joi.number()).length(1536).allow(null).default(null),
+  embeddingVector: Joi.array()
+    .items(Joi.number())
+    .length(1536)
+    .allow(null)
+    .default(null),
   embeddedAt: Joi.date().allow(null).default(null),
   ratings: Joi.object({
     totalRating: Joi.number().min(0).default(0),
@@ -915,15 +919,15 @@ const softDeleteMany = async (ids = [], actorId, actorEmail) => {
  */
 const findByHealthBenefit = async (keywords = [], options = {}) => {
   try {
-    if (!keywords.length) return []
+    if (!keywords.length) return [];
 
-    const { limit = 12, category = null } = options
+    const { limit = 12, category = null } = options;
 
-    const regexps = keywords.map((kw) => new RegExp(kw, 'i'))
+    const regexps = keywords.map((kw) => new RegExp(kw, "i"));
 
     const matchStage = {
       deleted: false,
-      status: 'active',
+      status: "active",
       stock: { $gt: 0 },
       $or: [
         { title: { $in: regexps } },
@@ -931,11 +935,11 @@ const findByHealthBenefit = async (keywords = [], options = {}) => {
         { description: { $in: regexps } },
         { healthBenefits: { $in: regexps } },
       ],
-    }
+    };
 
     // Lọc thêm theo danh mục nếu có
     if (category) {
-      matchStage['primary_category.slug'] = category
+      matchStage["primary_category.slug"] = category;
     }
 
     const pipeline = [
@@ -944,17 +948,22 @@ const findByHealthBenefit = async (keywords = [], options = {}) => {
       // Lookup primary category để hiển thị tên danh mục
       {
         $lookup: {
-          from: 'categories',
-          localField: 'primary_category_id',
-          foreignField: '_id',
+          from: "categories",
+          localField: "primary_category_id",
+          foreignField: "_id",
           pipeline: [
             { $match: { deleted: false } },
             { $project: { _id: 1, title: 1, slug: 1 } },
           ],
-          as: 'primary_category',
+          as: "primary_category",
         },
       },
-      { $unwind: { path: '$primary_category', preserveNullAndEmptyArrays: true } },
+      {
+        $unwind: {
+          path: "$primary_category",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
 
       // Sắp xếp: bán chạy nhất > vị trí
       { $sort: { soldCount: -1, position: 1 } },
@@ -973,20 +982,20 @@ const findByHealthBenefit = async (keywords = [], options = {}) => {
           soldCount: 1,
           thumbnail: 1,
           healthBenefits: 1,
-          'primary_category.title': 1,
-          'primary_category.slug': 1,
+          "primary_category.title": 1,
+          "primary_category.slug": 1,
         },
       },
-    ]
+    ];
 
     return await GET_DB()
       .collection(PRODUCT_COLLECTION_NAME)
       .aggregate(pipeline)
-      .toArray()
+      .toArray();
   } catch (error) {
-    throw new Error(error)
+    throw new Error(error);
   }
-}
+};
 
 /**
  * Tìm sản phẩm theo mảng từ khóa (tìm kiếm Regex).
@@ -994,16 +1003,16 @@ const findByHealthBenefit = async (keywords = [], options = {}) => {
  */
 const findByKeywords = async (keywords = [], options = {}) => {
   try {
-    if (!keywords.length) return []
-    const { limit = 15 } = options
+    if (!keywords.length) return [];
+    const { limit = 15 } = options;
 
-    const regexps = keywords.map((kw) => new RegExp(kw, 'i'))
+    const regexps = keywords.map((kw) => new RegExp(kw, "i"));
 
     return await GET_DB()
       .collection(PRODUCT_COLLECTION_NAME)
       .find({
         deleted: false,
-        status: 'active',
+        status: "active",
         stock: { $gt: 0 },
         $or: [
           { title: { $in: regexps } },
@@ -1024,12 +1033,11 @@ const findByKeywords = async (keywords = [], options = {}) => {
         stock: 1,
         soldCount: 1,
       })
-      .toArray()
+      .toArray();
   } catch (error) {
-    throw new Error(error)
+    throw new Error(error);
   }
-}
-
+};
 
 /**
  * Tìm sản phẩm bằng MongoDB Atlas Vector Search ($vectorSearch).
@@ -1046,34 +1054,34 @@ const findByVectorSearch = async (queryVector, limit = 8) => {
       .aggregate([
         {
           $vectorSearch: {
-            index: 'vector_index',
-            path: 'embeddingVector',
+            index: "vector_index",
+            path: "embeddingVector",
             queryVector,
-            numCandidates: 200,
+            numCandidates: 200, // Số lượng sản phẩm ứng viên cần quét trước khi lọc
             limit: limit + 10, // Lấy dư ra một chút để bù trừ cho bước lọc $match bên dưới
           },
         },
         {
-          $match: { deleted: false, status: 'active', stock: { $gt: 0 } },
+          $match: { deleted: false, status: "active", stock: { $gt: 0 } },
         },
         {
           $limit: limit,
         },
         {
           $lookup: {
-            from: 'categories',
-            localField: 'primary_category_id',
-            foreignField: '_id',
+            from: "categories",
+            localField: "primary_category_id",
+            foreignField: "_id",
             pipeline: [
               { $match: { deleted: false } },
               { $project: { _id: 1, title: 1, slug: 1 } },
             ],
-            as: 'primary_category',
+            as: "primary_category",
           },
         },
         {
           $addFields: {
-            primary_category: { $arrayElemAt: ['$primary_category', 0] },
+            primary_category: { $arrayElemAt: ["$primary_category", 0] },
           },
         },
         {
@@ -1088,18 +1096,18 @@ const findByVectorSearch = async (queryVector, limit = 8) => {
             soldCount: 1,
             thumbnail: 1,
             description: 1, // Raw HTML từ TinyMCE — sẽ được stripHtml() trước khi nhét vào context
-            'primary_category.title': 1,
-            'primary_category.slug': 1,
-            score: { $meta: 'vectorSearchScore' },
+            "primary_category.title": 1,
+            "primary_category.slug": 1,
+            score: { $meta: "vectorSearchScore" },
           },
         },
       ])
-      .toArray()
+      .toArray();
   } catch (error) {
     // Nếu Vector Index chưa được tạo trên Atlas, trả về rỗng để fallback sang findByKeywords
-    return []
+    return [];
   }
-}
+};
 
 /**
  * [Chatbot Tool] Lấy danh sách sản phẩm bán chạy nhất, sắp xếp theo soldCount giảm dần.
@@ -1164,6 +1172,5 @@ export const productModel = {
   findByHealthBenefit,
   findByKeywords,
   findByVectorSearch, // RAG: Vector Search cho Chatbot
-  findTopSelling,    // Chatbot: Lấy sản phẩm bán chạy nhất
+  findTopSelling, // Chatbot: Lấy sản phẩm bán chạy nhất
 };
-
