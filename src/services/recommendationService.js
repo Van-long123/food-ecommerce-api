@@ -1,9 +1,9 @@
 import axios from 'axios'
 import { StatusCodes } from 'http-status-codes'
 import ApiError from '~/utils/ApiError'
-import { env } from '~/config/environment'
+import { RECOMMENDATION_DOMAIN } from '~/utils/constants'
 
-const BASE_URL = env.RECOMMENDATION_SERVICE_URL || 'http://localhost:8000'
+const BASE_URL = RECOMMENDATION_DOMAIN || 'http://localhost:8000'
 
 /**
  * Gọi Python microservice để lấy danh sách sản phẩm gợi ý theo product_id.
