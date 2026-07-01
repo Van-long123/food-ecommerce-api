@@ -1,7 +1,6 @@
 import { env } from "~/config/environment";
 //Những domain được phép truy cập tới tài nguyên của Server
-export const WHITELIST_ORIGIN = ["https://fresh-food-web.vercel.app"];
-
+export const WHITELIST_ORIGIN = [env.WEBSITE_DOMAIN_PROD];
 export const WEBSITE_DOMAIN =
   env.BUILD_MODE === "production"
     ? env.WEBSITE_DOMAIN_PROD
